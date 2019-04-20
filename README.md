@@ -1,7 +1,6 @@
 # clj-karaoke
 
-FIXME: description
-
+clojure functions and cli program that extract lyrics and timing data for sing-along display 
 ## Installation
 
 Download from http://example.com/FIXME.
@@ -10,11 +9,11 @@ Download from http://example.com/FIXME.
 
 FIXME: explanation
 
-    $ java -jar clj-karaoke-0.1.0-standalone.jar [args]
+    $ java -jar clj-karaoke-0.1.0-standalone.jar input-file.mid output.json
 
 ## Options
 
-FIXME: listing of options this app accepts.
+- `--type` either edn or json 
 
 ## Examples
 
@@ -30,7 +29,7 @@ FIXME: listing of options this app accepts.
 
 ## License
 
-Copyright © 2019 FIXME
+Copyright © 2019 
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
