@@ -1,4 +1,4 @@
-(defproject clj-karaoke "0.1.0-SNAPSHOT"
+(defproject clj-karaoke-lyrics "0.1.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
@@ -9,10 +9,10 @@
                  ;; [com.cerner/clara-rules "0.19.0"]
                  [org.clojure/data.json "0.2.6"]
                  [com.rpl/specter "1.1.2"]
-                 [fn-fx/fn-fx-javafx "0.5.0-SNAPSHOT"]
-                 [org.clojure/core.async "0.4.490"]
-                 [com.layerware/hugsql "0.4.9"]
-                 [mysql/mysql-connector-java "8.0.14"]]
+                 ;; [fn-fx/fn-fx-javafx "0.5.0-SNAPSHOT"]
+                 [org.clojure/core.async "0.4.490"]]
+                 ;; [com.layerware/hugsql "0.4.9"]
+                 ;; [mysql/mysql-connector-java "8.0.14"]]
   :main ^:skip-aot clj-karaoke.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
