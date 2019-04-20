@@ -74,16 +74,21 @@
     :default :json
     :parse-fn {"json" :json
                "edn" :edn}
-    :validate [#(contains? #{:json :edn} %) "Type must be either json or edn"]]])
+    :validate [#(contains? #{:json :edn} %) "Type must be either json or edn"]]
+   ["-h" "--help"]])
 (declare extract-lyrics-from-file)
 
 (defn -main [& args]
   (let [options (parse-opts args opts)
         [input-file output-file] (:arguments options)]
     (if (nil? (:errors options))
-      (do
-        (extract-lyrics-from-file input-file output-file (-> options :options :type))
-        (println "Done."))
+      (cond
+        (-> options :options :help)
+        (println (:summary options))
+        :else 
+        (do
+          (extract-lyrics-from-file input-file output-file (-> options :options :type))
+          (println "Done.")))
       (doseq [e (:errors options)]
         (println e)))))
 
