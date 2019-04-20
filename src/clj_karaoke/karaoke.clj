@@ -6,11 +6,8 @@
   (play [this output]))
 
 (defrecord TextOffset [offset-ms text])
-
 (defrecord LyricsFrame [base-offset text-offset-list])
-
 (defrecord Lyrics [frames])
-
 (defrecord PrintOutput [text])
 (defrecord NewFrameOutput [frame])
 
@@ -57,22 +54,8 @@
           (<! (async/timeout (:base-offset frame)))
           (play frame output)
           (recur (rest f)))))))
-      
 
-(def test-frame
-  (-> (empty-frame)
-      (add-text-to-frame "A        " 1000)
-      (add-text-to-frame "B        " 2000)
-      (add-text-to-frame "C        " 3000)))
 
-(def test-frame-2
-  (-> (empty-frame)
-      (assoc :base-offset 11000)
-      (add-text-to-frame "D        " 2000)
-      (add-text-to-frame "E        " 2000)
-      (add-text-to-frame "F        " 2000)))
-
-(def test-lyrics (->Lyrics [test-frame test-frame-2]))
 
 (defprotocol Player
   (new-frame [this frame])
@@ -95,3 +78,19 @@
           (instance? NewFrameOutput o) (new-frame this o)
           (instance? PrintOutput o) (print-output this o))
         (recur (<! in-chan))))))
+
+#_((def test-frame
+     (-> (empty-frame)
+         (add-text-to-frame "A        " 1000)
+         (add-text-to-frame "B        " 2000)
+         (add-text-to-frame "C        " 3000)))
+
+   (def test-frame-2
+     (-> (empty-frame)
+         (assoc :base-offset 11000)
+         (add-text-to-frame "D        " 2000)
+         (add-text-to-frame "E        " 2000)
+         (add-text-to-frame "F        " 2000)))
+
+   (def test-lyrics (->Lyrics [test-frame test-frame-2]))
+  )

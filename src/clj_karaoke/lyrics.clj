@@ -1,44 +1,21 @@
 (ns clj-karaoke.lyrics
   (:require [clojure.string :refer [trim-newline join]]
-            [clj-karaoke.karaoke :as k])
+            ;; [clj-karaoke.karaoke :as k]
+            [clojure.edn :as edn]
+            [clojure.java.io :refer [file input-stream]]
+            ; [clj-karaoke.db :as db]
+            [clojure.core.async :as async :refer [<! >! go go-loop chan]])
   (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage]
-           [java.io File]
+           ;; [java.io File IOException]
            [java.lang String]))
 
+#_((def sample-file "/home/victor/Downloads/Crazy.mid")
 
-#_(comment
-   (def cx "007074704954011898567:vq4nmfwmtgc")
+   (def sample-file-format (MidiSystem/getMidiFileFormat (File. sample-file)))
 
-   (def key "AIzaSyDf_X7uI76-BTI7Y9fIH0CZQ6JOE9ow9jg")
+   (def seqr (MidiSystem/getSequencer))
 
-   (def base-search-url "https://www.googleapis.com/customsearch/v1")
-   (defn build-search-url [q]
-     (str "https://www.googleapis.com/customsearch/v1?key=" key "&cx=" cx "&q=" q))
-
-   (def sample-url (build-search-url "take on me"))
-
-   (defn search-music [q]
-     (http/get base-search-url
-               {:query-params {:q q
-                               :key key
-                               :cx cx}
-                :as :json}))
-
-   (def sample-res (http/get base-search-url
-                             {:query-params {:q "take on me"
-                                             :key key
-                                             :cx cx}
-                              :as :json})))
-
-
-  (def sample-file "/home/victor/Downloads/Africa.mid")
-
-(def sample-file-format (MidiSystem/getMidiFileFormat (File. sample-file)))
-
-(def seqr (MidiSystem/getSequencer))
-
-(def mid-seq (MidiSystem/getSequence (File. sample-file)))
-
+   (def mid-seq (MidiSystem/getSequence (File. sample-file))))
 
 (deftype MyEvListener []
   MetaEventListener
@@ -49,26 +26,24 @@
                   (drop 3)
                   (apply str)))))
 
+#_(doto seqr
+    (.open)
+    (.setSequence mid-seq)
+    (.addMetaEventListener (->MyEvListener))
+    (.start))
 
-(doto seqr
-  (.open)
-  (.setSequence mid-seq)
-  (.addMetaEventListener (->MyEvListener))
-  (.start))
+#_(.stop seqr)
 
-(.stop seqr)
-
-
-(defn event-text [ evt]
+(defn event-text [evt]
   (let [msg (.getMessage evt)]
     (->> (String. msg)
          (drop 3)
          (apply str)
          (trim-newline))))
 
-(def tracks (.getTracks mid-seq))
+#_(def tracks (.getTracks mid-seq))
 
-(let [msgs (apply
+#_(let [msgs (apply)
             concat
             (for [t tracks]
               (for [tcs (range (.size t))
@@ -78,10 +53,16 @@
                     :when (and
                            (> offset 0)
                            (instance? MetaMessage msg))]
-                [offset (event-text msg) (.getType msg)])))
-      sorted-msgs (sort-by first msgs)]
-  (reduce (fn [res [offset text type]]
-            (if-not (= type 5)
+                [offset (event-text msg) (.getType msg)]))]
+      sorted-msgs (sort-by first msgs)
+    (reduce (fn [res [offset text type]]
+              (cond
+                (empty? res) [text]
+                (empty? text) (conj res text)
+                :else (conj
+                       (vec ((comp reverse rest reverse) res))
+                       (join "" [(last res) type])))
+              #_(if-not (= type 5))
               res
               (do
                 (cond
@@ -89,18 +70,46 @@
                   (empty? text) (conj res text)
                   :else (conj
                          (vec ((comp reverse rest reverse) res))
-                         (join "" [(last res) text]))))))
-          []
-          sorted-msgs))
+                         (join "" [(last res) text])))))
+            []
+            sorted-msgs))
 
+(defprotocol PMap
+  (->map [this]))
 
 (defrecord MidiLyricsEvent [text ticks])
 
 (defrecord MidiLyricsFrame [events ticks])
 
+
+(extend-protocol PMap
+  MidiLyricsEvent
+  (->map [this]
+    {:type :lyrics-event
+     :offset (:offset this)
+     :ticks (:ticks this)
+     :text (:text this)})
+
+  MidiLyricsFrame
+  (->map [this]
+    {:type :frame-event
+     :ticks (:ticks this)
+     :events (map ->map (:events this))
+     :offset (:offset (first (:events this)))}))
+
+(defn tick-time [sequencer sequence]
+  (let [bpm (.getTempoInBPM sequencer)
+        ppq (if (pos? Sequence/PPQ)
+              Sequence/PPQ
+              (.getResolution sequence))
+        delta (/ 60000.0 (* bpm ppq))]
+    (fn [tick]
+      (* delta tick))))
+
 (defn lyrics-events
-  ([sequence resolution]
+  ([sequence sequencer]
    (let [tracks (.getTracks sequence)
+         tick-fn (tick-time sequencer sequence)
          msgs (apply concat
                      (for [t tracks :let [event-count (.size t)]]
                        (for [event-id (range event-count)
@@ -110,20 +119,115 @@
                              :when (and
                                     (> offset 0)
                                     (instance? MetaMessage msg)
-                                    (= (.getType msg) 5))]
+                                    (or
+                                     (= (.getType msg) 1)
+                                     (= (.getType msg) 5)))]
                          (->MidiLyricsEvent (event-text msg) offset))))
          sorted-msgs (sort-by :ticks msgs)]
-     (mapv #(assoc % :offset (* resolution (:ticks %))) sorted-msgs)))
+     (mapv #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs)))
   ([sequence]
    (lyrics-events sequence 192)))
 
-(defn tick-time [seqr sequence]
-  (let [bpm (.getTempoInBPM seqr)
-        ppq (if (pos? Sequence/PPQ) Sequence/PPQ 120.0)
-        delta (/ 60000.0 (* bpm ppq))]
-    (fn [tick]
-      (* delta tick))))
+(defn clean-frame? [evt]
+  (empty? (:text evt)))
 
+(defn lyrics-events-grouped [evts]
+  (loop [res [] events evts]
+    (if (empty? events)
+      res
+      (let [grp (take-while (comp not clean-frame?) events)
+            remaining (drop-while (comp not clean-frame?) events)]
+        (recur (conj res grp) (rest remaining))))))
+
+(defn lyrics-frames [evts]
+  (let [grps (lyrics-events-grouped evts)]
+    (map (fn [gr]
+           (->
+            (->MidiLyricsFrame gr (-> gr first :ticks))
+            (assoc :offset (:offset (first gr)))))
+         grps)))
+
+(defn frame-text [frame]
+  (let [evts-text (mapv :text (:events frame))]
+    (apply str evts-text)))
+
+(defn play-file  [file-path]
+  (let [sequencer (MidiSystem/getSequencer)
+        sequence (MidiSystem/getSequence (file file-path))]
+    (doto sequencer
+      (.open)
+      (.setSequence sequence))
+    (let [evts (lyrics-events sequence sequencer)
+          frames (lyrics-frames evts)
+          tick-fn (tick-time sequencer sequence)
+          out-chan (chan)
+          tos    (->>
+                  (for [f (vec frames)]
+                    (async/go
+                      (async/<! (async/timeout (tick-fn (:ticks f))))
+                      (async/>! out-chan f)))
+                     ;; (println (frame-text f))))
+                  (into []))]
+      (.start sequencer)
+      {:timeouts tos
+       :out-chan out-chan
+       :sequencer sequencer
+       :sequence sequence
+       :frames frames})))
 #_(defrecord MidiKaraoke [sequencer sequence]
-   Playable
-   (play [this]))
+    Playable
+    (play [this]))
+
+(defn load-lyrics-from-midi [midi-file]
+  (with-open [in (input-stream midi-file)]
+    (try
+      (let [sequence (MidiSystem/getSequence in)
+            sequencer (doto (MidiSystem/getSequencer)
+                       (.open)
+                       (.setSequence sequence))
+            frames (lyrics-frames (lyrics-events sequence sequencer))]
+        (.close sequencer)
+        frames)
+      (catch Exception e
+       (println (.getMessage e))
+       (println "Failed to load lyrics from " midi-file)
+       []))))
+
+
+; (defn load-events-into-db [midi-file]
+;   (let [sequencer (MidiSystem/getSequencer)]
+;     (try
+;       (let [sequence (MidiSystem/getSequence (File. midi-file))
+;             sequencer (doto sequencer
+;                         (.open)
+;                         (.setSequence sequence))
+;             tracks (.getTracks sequence)
+;             tick-fn (tick-time sequencer sequence)
+;             midi-id (db/insert-midi midi-file)]
+;         (doseq [t tracks :let [event-count (.size t)]]
+;           (doseq [event-id (range event-count)
+;                   :let [evt (.get t event-id)
+;                         msg (.getMessage evt)
+;                         ticks (.getTick evt)
+;                         offset (tick-fn ticks)]
+;                           ;; message-type (.getType msg)]
+;                   :when (and
+;                          (> ticks 0)
+;                          (instance? MetaMessage msg))]
+;             (db/insert-event midi-id (.getType msg) (event-text msg) ticks (double offset))
+;             (.close sequencer))))
+;       (catch Exception e
+;         (println "There was an error: " (.getMessage e)))
+;       (finally
+;         (.close sequencer)))))
+
+
+(defn save-lyrics [midi-file-path output-file]
+  (let [frames (load-lyrics-from-midi midi-file-path)
+        output-str (pr-str (map ->map frames))]
+    (spit output-file output-str)))
+
+(defn deserialize-lyrics [lyrics-file]
+  (let [reader-map {'clj_karaoke.lyrics.MidiLyricsEvent map->MidiLyricsEvent
+                    'clj_karaoke.lyrics.MidiLyricsFrame map->MidiLyricsFrame}]
+    (edn/read-string {:readers reader-map} (slurp lyrics-file))))

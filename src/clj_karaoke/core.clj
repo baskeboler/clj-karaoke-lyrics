@@ -1,108 +1,155 @@
 (ns clj-karaoke.core
-  (:require [fn-fx.fx-dom :as dom]
-            [fn-fx.controls :as ui]
-            [fn-fx.diff :refer [component defui render should-update?]])
+  (:require
+   ;; [seesaw.core :as ss]
+              ;; [seesaw.font :as sf]
+              ;; [seesaw.icon :as si]
+              ;; [clojurefx.clojurefx :as fx]
+              ;; [clojurefx.fxml :as fxml]
+              [clj-karaoke.lyrics :as l]
+              ; [clj-karaoke.db :as db]
+              [clojure.core.async :as async :refer [>! <! go go-loop chan]]
+              [clojure.core.reducers :as r]
+              [clojure.java.io :as io])
+  (:import [javax.swing JFileChooser]
+           [javax.swing.filechooser FileFilter FileNameExtensionFilter]
+           [java.io File])
+   ;; [fn-fx.fx-dom :as dom]
+            ;; [fn-fx.controls :as ui]
+            ;; [fn-fx.diff :refer [component defui render should-update?]])
   (:gen-class))
 
-(def main-font (ui/font :family "Helvetica" :size 20))
 
-(defui TodoItem
-  (render [this {:keys [done? idx text]}]
-          (ui/border-pane
-           :padding (ui/insets
-                     :top 10
-                     :bottom 10
-                     :left 0
-                     :right 0)
-           :left (ui/check-box
-                  :font main-font
-                  :text text
-                  :selected done?
-                  :on-action {:event :swap-status :idx idx})
-           :right (ui/button :text "X"
-                             :on-action {:event :delete-item :idx idx}))))
+;; (defonce force-toolkit-init (javafx.embed.swing.JFXPanel.))
 
-(defui MainWindow
-       (render [this {:keys [todos]}]
-          (ui/v-box
-            :style "-fx-base: rgb(30, 30, 35);"
-            :padding (ui/insets
-                        :top-right-bottom-left 25)
-           :children [(ui/text-field
-                        :id ::new-item
-                        :prompt-text "What needs to be done?"
-                        :font main-font
-                        :on-action {:event :add-item
-                                    :fn-fx/include {::new-item #{:text}}})
-                      (ui/scroll-pane
-                       :content [(ui/v-box
-                                  :children (map-indexed
-                                             (fn [idx todo]
-                                               (todo-item (assoc todo :idx idx)))
-                                             todos))])])))
-                      
+;; (set! *print-length* nil)
 
+;; (def main-font (ui/font :family "Helvetica" :size 20))
 
-(defui Stage
-       (render [this args]
-         (ui/stage
-           :title "ToDos"
-           :min-height 600
-           :listen/height {:event :height-change
-                           :fn-fx/include {::new-item #{:text}}}
-           :shown true
-           :scene (ui/scene
-                    :root (main-window args)))))
+(defn select-file ^File []
+  (let [file-filter (FileNameExtensionFilter. "Midi File" (into-array String ["mid"]))
+        chooser (doto (JFileChooser.)
+                  (.addChoosableFileFilter file-filter))
+        result (.showOpenDialog chooser nil)]
+    (if (= result JFileChooser/APPROVE_OPTION)
+      (.getSelectedFile chooser)
+      nil)))
 
+(defn open-midi
+  ([out-fn]
+   (let [f (select-file)
+         {:keys [out-chan frames] :as ret} (l/play-file (.getAbsolutePath f))]
+     (go-loop [in-frame (<! out-chan)]
+       (when-not (nil? in-frame)
+         (println (l/frame-text in-frame))
+         (out-fn (l/frame-text in-frame))
+         (recur (<! out-chan))))
+     ret))
+  ([] (open-midi identity)))
 
-(defmulti handle-event (fn [state event]
-                         (:event event)))
+;; (def big-text (ss/label "This is some text. Fuck you."))
+;; (ss/config! big-text :font (sf/font :name :monospaced
+                                    ;; :style #{:bold :italic}
+                                    ;; :size 42
+                                    ;; :icon (seesaw.icon/icon "Dolphin.jpg")
+                                    ;; :foreground "#FF0000")))
 
-(defmethod handle-event :swap-status
-  [state {:keys [idx]}]
-  (update-in state [:todos idx :done?] (fn [x]
-                                         (not x))))
+;; (defn change-frame [text]
+  ;; (ss/config! big-text :text text))
+;; (defn init! []
+  ;; (-> (ss/frame :title "Hi" :size [800 :by 600] :icon (seesaw.icon/icon "Dolphin.jpg")
+                ;; :content (ss/grid-panel
+                          ;; :items [
+                                  ;; (ss/vertical-panel :items [big-text "victor" "pepe"]))
+      ;; ss/pack!
+      ;; ss/show!)
+  ;; (open-midi change-frame))
 
-(defmethod handle-event :delete-item
-  [state {:keys [idx]}]
-  (update-in state [:todos] (fn [itms]
-                              (println itms idx)
-                              (vec (concat (take idx itms)
-                                           (drop (inc idx) itms))))))
+;; (defn start [^javafx.stage.Stage stage]
+  ;; (.show stage))
+(declare extract-lyrics-from-file)
 
-(defmethod handle-event :add-item
-  [state {:keys [fn-fx/includes]}]
-  (update-in state [:todos] conj {:done? false
-                                  :text (get-in includes [::new-item :text])}))
-
-(defmethod handle-event :default
-  [state event]
-  (println "No hander for event " (:type event) event)
-  state)
+(defn -main [input-file output-file & args]
+  (println "Hi!" input-file)
+  (extract-lyrics-from-file input-file output-file)
+  (println "Done."))
 
 
+(defn- is-midi? [^File file-obj]
+  (.. file-obj
+      (getName)
+      (endsWith ".mid")))
 
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (let [;; Data State holds the business logic of our app
-        data-state (atom {:todos [{:done? false
-                                   :text  "Take out trash"}]})
-        ;; handler-fn handles events from the ui and updates the data state
-        handler-fn (fn [event]
-                     (try
-                       (swap! data-state handle-event event)
-                       (catch Throwable ex
-                         (println ex))))
+(defn filter-midis [path]
+  (let [dir (io/file path)
+        files (.listFiles dir)
+        midi-files (filter is-midi? files)]
+    (map #(.getAbsolutePath %) midi-files)))
 
-        ;; ui-state holds the most recent state of the ui
-        ui-state   (agent (dom/app (stage @data-state) handler-fn))]
+;; (def winfx (fxml/load-fxml  "resources/cosa.fxml"))
 
-    ;; Every time the data-state changes, queue up an update of the UI
-    (add-watch data-state :ui (fn [_ _ _ _]
-                                (send ui-state
-                                      (fn [old-ui]
-                                        (try
-                                          (dom/update-app old-ui (stage @data-state))
-                                          (catch Throwable ex
-                                            (println ex)))))))))
+(defn extract-lyrics
+  ([midi-dir output-dir]
+   (let [files (filter-midis midi-dir)]
+    (doseq [f (vec files)
+            :let [file-name (clojure.string/replace
+                             f
+                             (re-pattern midi-dir)
+                             "")
+                  out-file-name (clojure.string/replace file-name #".mid" ".edn")
+                  out-path (str output-dir "/" out-file-name)
+                  absolute-path f
+                  lyrics (l/load-lyrics-from-midi absolute-path)]
+            :when (not-empty lyrics)]
+      (println "Processing " absolute-path)
+      ;; (l/save-lyrics absolute-path out-path)
+      (spit out-path (pr-str (map l/->map lyrics)))
+      (println "Done! Generated " out-path))))
+  ([midi-dir]
+   (extract-lyrics midi-dir "lyrics")))
+
+; (defn load-db [midi-dir]
+;   (let [files (filter-midis midi-dir)]
+;     (r/fold
+;      200
+;      (fn ([] []) ([& r] (apply concat r)))
+;      (fn
+;        ([res f]
+;         (println "processing " f)
+;         (l/load-events-into-db f)
+;         f))
+;      files)))
+(defn extract-lyrics-from-file [input output]
+  (let [frames (l/load-lyrics-from-midi input)]
+   (if-not (empty? frames)
+     (do
+       (spit output (pr-str (map l/->map frames)))
+       (println "Done! generated " output))
+     (println "Skipping " input ", empty frames"))))
+
+(defn extract-lyrics-2
+  ([midi-dir output-dir]
+   (let [files (filter-midis midi-dir)]
+     (r/fold
+      200
+      (fn
+        ([] [])
+        ([& r] (apply concat r)))
+      (fn [res f]
+        (println "processing " f)
+        (let [file-name (clojure.string/replace
+                         f (re-pattern midi-dir) "")
+              out-file-name (clojure.string/replace
+                             file-name #".mid" ".edn")
+              out-path (str output-dir "/" out-file-name)
+              frames (l/load-lyrics-from-midi f)]
+          (if-not (empty? frames)
+            (do
+              (spit out-path (pr-str (map l/->map frames)))
+              (println "Done! generated " out-path)
+              (conj res out-path))
+            (do
+              (println "Skipping " file-name ", empty frames")
+              res))))
+      (vec files))))
+  ([midi-dir] (extract-lyrics-2 midi-dir "lyrics")))
+
