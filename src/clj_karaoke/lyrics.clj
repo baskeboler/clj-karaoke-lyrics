@@ -1,5 +1,5 @@
 (ns clj-karaoke.lyrics
-  (:require [clojure.string :refer [trim-newline join]]
+  (:require [clojure.string :refer [replace-first trim-newline join starts-with?]]
             [clojure.edn :as edn]
             [clojure.java.io :refer [file input-stream]]
             [clojure.core.async :as async :refer [<! >! go go-loop chan]])
@@ -81,13 +81,29 @@
 (defn clean-frame? [evt]
   (empty? (:text evt)))
 
+(defn start-of-frame? [evt]
+  (or
+   (starts-with? (:text evt) "\\")
+   (starts-with? (:text evt) "/")
+   (clean-frame? evt)))
+(defn clean-start-of-frame [evt]
+  (-> evt
+      (update :text (fn [t]
+                      (-> t
+                          (replace-first #"\\" "")
+                          (replace-first #"/" ""))))))
+
 (defn lyrics-events-grouped [evts]
   (loop [res [] events evts]
     (if (empty? events)
       res
-      (let [grp (take-while (comp not clean-frame?) events)
-            remaining (drop-while (comp not clean-frame?) events)]
-        (recur (conj res grp) (rest remaining))))))
+      (let [frame-start (-> (first events)
+                            clean-start-of-frame)
+            grp (concat
+                 [frame-start]
+                 (take-while (comp not start-of-frame?) (rest events)))
+            remaining (drop-while (comp not start-of-frame?) (rest events))]
+        (recur (conj res grp) remaining)))))
 
 (defn lyrics-frames [evts]
   (let [grps (lyrics-events-grouped evts)]
