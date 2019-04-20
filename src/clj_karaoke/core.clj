@@ -9,7 +9,9 @@
               ; [clj-karaoke.db :as db]
               [clojure.core.async :as async :refer [>! <! go go-loop chan]]
               [clojure.core.reducers :as r]
-              [clojure.java.io :as io])
+              [clojure.java.io :as io]
+              [clojure.data.json :as json]
+              [clojure.tools.cli :refer [parse-opts]])
   (:import [javax.swing JFileChooser]
            [javax.swing.filechooser FileFilter FileNameExtensionFilter]
            [java.io File])
@@ -66,12 +68,24 @@
 
 ;; (defn start [^javafx.stage.Stage stage]
   ;; (.show stage))
+
+(def opts
+  [["-t" "--type TYPE" "Type of output"
+    :default :json
+    :parse-fn {"json" :json
+               "edn" :edn}
+    :validate [#(contains? #{:json :edn} %) "Type must be either json or edn"]]])
 (declare extract-lyrics-from-file)
 
-(defn -main [input-file output-file & args]
-  (println "Hi!" input-file)
-  (extract-lyrics-from-file input-file output-file)
-  (println "Done."))
+(defn -main [& args]
+  (let [options (parse-opts args opts)
+        [input-file output-file] (:arguments options)]
+    (if (nil? (:errors options))
+      (do
+        (extract-lyrics-from-file input-file output-file (-> options :options :type))
+        (println "Done."))
+      (doseq [e (:errors options)]
+        (println e)))))
 
 
 (defn- is-midi? [^File file-obj]
@@ -118,11 +132,14 @@
 ;         (l/load-events-into-db f)
 ;         f))
 ;      files)))
-(defn extract-lyrics-from-file [input output]
+(defn extract-lyrics-from-file [input output format]
+  (assert (contains? #{:edn :json} format))
   (let [frames (l/load-lyrics-from-midi input)]
    (if-not (empty? frames)
      (do
-       (spit output (pr-str (map l/->map frames)))
+       (case format
+         :edn (spit output (pr-str (map l/->map frames)))
+         :json (spit output (json/json-str (map l/->map frames))))
        (println "Done! generated " output))
      (println "Skipping " input ", empty frames"))))
 
