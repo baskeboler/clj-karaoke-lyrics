@@ -1,31 +1,20 @@
 # clj-karaoke
 
 clojure functions and cli program that extract lyrics and timing data for sing-along display 
-## Installation
+## Building
 
-Download from http://example.com/FIXME.
+    $ lein uberjar 
 
 ## Usage
 
-FIXME: explanation
 
-    $ java -jar clj-karaoke-0.1.0-standalone.jar input-file.mid output.json
+    $ java -jar clj-karaoke-0.1.0-standalone.jar input-file.mid output.json --type json
 
 ## Options
 
 - `--type` either edn or json 
+- `--help` show help
 
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
 
 ## License
 
