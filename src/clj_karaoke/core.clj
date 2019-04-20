@@ -9,26 +9,6 @@
   (:gen-class))
 
 
-(defn select-file ^File []
-  (let [file-filter (FileNameExtensionFilter. "Midi File" (into-array String ["mid"]))
-        chooser (doto (JFileChooser.)
-                  (.addChoosableFileFilter file-filter))
-        result (.showOpenDialog chooser nil)]
-    (if (= result JFileChooser/APPROVE_OPTION)
-      (.getSelectedFile chooser)
-      nil)))
-
-(defn open-midi
-  ([out-fn]
-   (let [f (select-file)
-         {:keys [out-chan frames] :as ret} (l/play-file (.getAbsolutePath f))]
-     (go-loop [in-frame (<! out-chan)]
-       (when-not (nil? in-frame)
-         (println (l/frame-text in-frame))
-         (out-fn (l/frame-text in-frame))
-         (recur (<! out-chan))))
-     ret))
-  ([] (open-midi identity)))
 
 (def opts
   [["-t" "--type TYPE" "Type of output"
@@ -54,21 +34,12 @@
         (println e)))))
 
 
-(defn- is-midi? [^File file-obj]
-  (.. file-obj
-      (getName)
-      (endsWith ".mid")))
 
-(defn filter-midis [path]
-  (let [dir (io/file path)
-        files (.listFiles dir)
-        midi-files (filter is-midi? files)]
-    (map #(.getAbsolutePath %) midi-files)))
 
-(defn extract-lyrics
-  ([midi-dir output-dir]
-   (let [files (filter-midis midi-dir)]
-    (doseq [f (vec files)
+#_(defn extract-lyrics
+   ([midi-dir output-dir]
+    (let [files (filter-midis midi-dir)]
+     (doseq [f (vec files)]
             :let [file-name (clojure.string/replace
                              f
                              (re-pattern midi-dir)
@@ -77,12 +48,12 @@
                   out-path (str output-dir "/" out-file-name)
                   absolute-path f
                   lyrics (l/load-lyrics-from-midi absolute-path)]
-            :when (not-empty lyrics)]
+            :when (not-empty lyrics)
       (println "Processing " absolute-path)
       (spit out-path (pr-str (map l/->map lyrics)))
       (println "Done! Generated " out-path))))
-  ([midi-dir]
-   (extract-lyrics midi-dir "lyrics")))
+   ([midi-dir]
+    (extract-lyrics midi-dir "lyrics")))
 
 (defn extract-lyrics-from-file [input output format]
   (assert (contains? #{:edn :json} format))
@@ -95,9 +66,9 @@
        (println "Done! generated " output))
      (println "Skipping " input ", empty frames"))))
 
-(defn extract-lyrics-2
-  ([midi-dir output-dir]
-   (let [files (filter-midis midi-dir)]
+#_(defn extract-lyrics-2
+   ([midi-dir output-dir]
+    (let [files (filter-midis midi-dir)]
      (r/fold
       200
       (fn
@@ -120,5 +91,5 @@
               (println "Skipping " file-name ", empty frames")
               res))))
       (vec files))))
-  ([midi-dir] (extract-lyrics-2 midi-dir "lyrics")))
+   ([midi-dir] (extract-lyrics-2 midi-dir "lyrics")))
 
