@@ -14,7 +14,8 @@ clojure functions and cli program that extract lyrics and timing data for sing-a
 
 - `--type` either edn or json 
 - `--help` show help
-
+- `-i` input directory with midi files 
+- `-o` output directory where to store lyrics files 
 
 ## License
 
