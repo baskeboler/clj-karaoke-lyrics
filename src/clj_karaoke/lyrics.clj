@@ -4,7 +4,8 @@
             [clojure.java.io :refer [file input-stream]]
             [clojure.core.async :as async :refer [<! >! go go-loop chan]])
   (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage]
-           [java.lang String]))
+           [java.lang String]
+           [java.io File]))
 
 
 (deftype MyEvListener []
@@ -30,8 +31,9 @@
 (defrecord MidiLyricsEvent [text ticks])
 
 (defrecord MidiLyricsFrame [events ticks])
+(defrecord MidiSimpleLyricsFrame [frame])
 
-
+(declare frame-text)
 (extend-protocol PMap
   MidiLyricsEvent
   (->map [this]
@@ -45,7 +47,19 @@
     {:type :frame-event
      :ticks (:ticks this)
      :events (map ->map (:events this))
-     :offset (:offset (first (:events this)))}))
+     :offset (:offset (first (:events this)))})
+  MidiSimpleLyricsFrame
+  (->map [this]
+    {:type :simple-frame-event
+     :text (frame-text (:frame this))
+     :ticks (-> this :frame :ticks)
+     :offset (-> this :frame :events first :offset)
+     :event-offsets (map
+                     (fn [evt]
+                       {:offset (:offset evt)
+                        :char-count (count (:text evt))})
+                     (-> this :frame :events))}))
+
 
 (defn tick-time [sequencer sequence]
   (let [bpm (.getTempoInBPM sequencer)
@@ -70,11 +84,11 @@
                                     (> offset 0)
                                     (instance? MetaMessage msg)
                                     (or
-                                     (= (.getType msg) 1)
+                                     ;; (= (.getType msg) 1)
                                      (= (.getType msg) 5)))]
                          (->MidiLyricsEvent (event-text msg) offset))))
          sorted-msgs (sort-by :ticks msgs)]
-     (mapv #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs)))
+     (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs)))
   ([sequence]
    (lyrics-events sequence 192)))
 
