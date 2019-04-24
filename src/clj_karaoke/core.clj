@@ -6,9 +6,11 @@
               [clojure.java.io :as io]
               [clojure.data.json :as json]
               [clojure.tools.cli :refer [parse-opts]])
+  (:import [java.io File])
   (:gen-class))
 
 (set! *warn-on-reflection* true)
+;; (set! ^:dynamic *print-length* nil)
 (def valid-formats #{:edn :json})
 (def opts
   [["-t" "--type TYPE" "Type of output"
@@ -101,23 +103,23 @@
         (vec files))))
     ([midi-dir] (extract-lyrics-2 midi-dir "lyrics")))
 
-(defn- is-midi? [file-obj]
+(defn- is-midi? [^File file-obj]
   (.. file-obj
       (getName)
       (endsWith ".mid")))
 
-(defn filter-midis [path]
+(defn- filter-midis [path]
   (let [dir (io/file path)
         files (.listFiles dir)
         midi-files (filter is-midi? files)]
-     (map #(.getAbsolutePath %) midi-files)))
+     (map #(.getAbsolutePath ^File %) midi-files)))
 
 (defn extract-lyrics-from-input-directory [input-dir output-dir format]
   (assert (contains? valid-formats format))
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
     (r/fold
-     50
+     16
      (fn
        ([] [])
        ([& r] (apply concat r)))

@@ -50,14 +50,13 @@
      :offset (:offset (first (:events this)))})
   MidiSimpleLyricsFrame
   (->map [this]
-    {:type :simple-frame-event
-     :text (frame-text (:frame this))
+    {:text (frame-text (:frame this))
      :ticks (-> this :frame :ticks)
      :offset (-> this :frame :events first :offset)
-     :event-offsets (map
+     :event_offsets (map
                      (fn [evt]
                        {:offset (:offset evt)
-                        :char-count (count (:text evt))})
+                        :char_count (count (:text evt))})
                      (-> this :frame :events))}))
 
 
