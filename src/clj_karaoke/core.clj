@@ -1,11 +1,13 @@
 (ns clj-karaoke.core
   (:require   [clj-cli-progress.core :as progress :refer [progress-bar-wrapped-collection]]
               [clj-karaoke.lyrics :as l]
-              [clojure.core.async :as async :refer [>! <! go go-loop chan]]
+              [clj-karaoke.protocols :as p]
+              ;; [clojure.core.async :as async :refer [>! <! go go-loop chan]]
               [clojure.core.reducers :as r]
               [clojure.java.io :as io]
               [clojure.data.json :as json]
-              [clojure.tools.cli :refer [parse-opts]])
+              [clojure.tools.cli :refer [parse-opts]]
+              [clojure.string :as str])
   (:import [java.io File])
   (:gen-class))
 
@@ -18,29 +20,66 @@
     :parse-fn {"json" :json
                "edn" :edn}
     :validate [#(contains? valid-formats %) "Type must be either json or edn"]]
+   ["-z" "--offset NUMBER" "Lyrics offset"
+    :default 0
+    :parse-fn #(Integer/parseInt %)]
    ["-i" "--input-dir DIR" "Input Directory of midi files"]
    ["-o" "--output-dir DIR" "Output Directory of lyrics files"
     :default "lyrics"]
    ["-h" "--help"]])
+
+(defn usage [summary]
+  (-> ["midi lyrics extractor"
+       ""
+       "usage: clj-karaoke-lyrics [options] action"
+       ""
+       "Options:"
+       summary]
+      (str/join \newline)))
+
+(defn error-msg [errors]
+  (str "The following errors occured:\n\n"
+       (str/join \newline errors)))
+
+(defn process-opts [args]
+  (let [{:keys [arguments errors summary options]}      (parse-opts args opts)
+        {:keys [help input-dir output-dir type offset]} options
+        [input-file output-file]                        arguments]
+    (cond
+      (some? help)
+      {:exit-message (usage summary) :ok? true}
+      errors
+      {:exit-message (error-msg errors)}
+      (and input-dir output-dir)
+      {:action :process-dir :options options}
+      (and input-file output-file)
+      {:action :process-file :options options :input input-file :output output-file}
+      :else
+      {:exit-message (usage summary)})))
 (declare extract-lyrics-from-file)
 (declare extract-lyrics-from-input-directory)
 
 (defn -main [& args]
-  (let [options (parse-opts args opts)
+  (let [options                  (parse-opts args opts)
         [input-file output-file] (:arguments options)]
     (if (nil? (:errors options))
       (cond
         (-> options :options :help)
         (println (:summary options))
         (some? (-> options :options :input-dir))
-        (do
-          (extract-lyrics-from-input-directory
-           (get-in options [:options :input-dir])
-           (get-in options [:options :output-dir])
-           (get-in options [:options :type])))
+        ;; (do
+        (extract-lyrics-from-input-directory
+         (get-in options [:options :input-dir])
+         (get-in options [:options :output-dir])
+         (get-in options [:options :type])
+         (get-in options [:options :offset]))
         :else
         (do
-          (extract-lyrics-from-file input-file output-file (-> options :options :type))
+          (extract-lyrics-from-file
+           input-file
+           output-file
+           (-> options :options :type)
+           (-> options :options :offset))
           (println "Done.")))
       (doseq [e (:errors options)]
         (println e)))))
@@ -64,15 +103,19 @@
     ([midi-dir]
      (extract-lyrics midi-dir "lyrics")))
 
-(defn extract-lyrics-from-file [input output format]
-  (assert (contains? valid-formats format))
-  (let [frames  (map l/->MidiSimpleLyricsFrame (l/load-lyrics-from-midi input))
-        wrapped (progress-bar-wrapped-collection frames "frames")]
+(defn extract-lyrics-from-file [input output format offset]
+  ;; (assert (contains? valid-formats format))
+  (let [frames
+        ;; (map l/->MidiSimpleLyricsFrame
+                     (l/load-lyrics-from-midi input)
+        wrapped (progress-bar-wrapped-collection
+                 frames ;; (map #(l/with-offset % offset) frames)
+                 "frames")]
     (if-not (empty? frames)
       (do
         (case format
-          :edn (spit output (pr-str (map l/->map wrapped)))
-          :json (spit output (json/json-str (map l/->map wrapped))))
+          :edn  (spit output (pr-str (map p/->map wrapped)))
+          :json (spit output (json/json-str (map p/->map wrapped))))
         (println "Done! generated " output))
       (println "Skipping " input ", empty frames"))))
 
@@ -112,10 +155,10 @@
   (let [dir (io/file path)
         files (.listFiles dir)
         midi-files (filter is-midi? files)]
-     (map #(.getAbsolutePath ^File %) midi-files)))
+    (map #(.getAbsolutePath ^File %) midi-files)))
 
-(defn extract-lyrics-from-input-directory [input-dir output-dir format]
-  (assert (contains? valid-formats format))
+(defn extract-lyrics-from-input-directory [input-dir output-dir format offset]
+  ;; (assert (contains? valid-formats format))
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
     (r/fold
@@ -130,12 +173,15 @@
                               :json ".json")
              out-file-name (clojure.string/replace file-name #".mid" file-extension)
              out-path (str output-dir "/" out-file-name)
-             frames (map l/->MidiSimpleLyricsFrame (l/load-lyrics-from-midi f))]
+             frames
+             ;; (map
+                     ;; (comp  #(l/with-offset % offset)  l/->MidiSimpleLyricsFrame)
+             (l/load-lyrics-from-midi f)]
          (if-not (empty? frames)
            (do
              (case format
-               :edn (spit out-path (pr-str (map l/->map frames)))
-               :json (spit out-path (json/json-str (map l/->map frames))))
+               :edn (spit out-path (pr-str (map p/->map frames)))
+               :json (spit out-path (json/json-str (map p/->map frames))))
              ;; (println "Generated " out-path)
              (conj res out-path))
            (do

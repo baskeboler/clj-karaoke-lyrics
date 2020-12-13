@@ -2,94 +2,141 @@
   (:require [clojure.string :refer [replace-first trim-newline join starts-with?]]
             [clojure.edn :as edn]
             [clojure.java.io :refer [file input-stream]]
-            [clojure.core.async :as async :refer [<! >! go go-loop chan]])
-  (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage]
+            [clj-karaoke.protocols :refer [->map with-offset PMap POffset]]
+            [clojure.core.async :as async :refer [<! >! go go-loop chan]]
+            [clj-karaoke.lyrics-event :as levent :refer [create-lyrics-event]])
+  (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage MidiMessage]
            [java.lang String]
            [java.io File]))
 
+
+
+(def generate-id (comp str gensym))
+
+(defn set-event-id
+  [evt]
+  (if (nil? (:id evt))
+    (assoc evt :id (generate-id))
+    evt))
 
 (deftype MyEvListener []
   MetaEventListener
   (meta [this evt]
     (println "Evt -- type : " (.getType evt) ", message: "
              (->> (.getMessage evt)
-                  #(String. %)
+                  #(str  (bytes %))
                   (drop 3)
                   (apply str)))))
 
-(defn event-text [evt]
+
+
+(defn event-text [^MetaMessage evt]
   (let [msg (.getMessage evt)]
-    (->> (String. msg)
+    (->> (String. (bytes msg))
          (drop 3)
          (apply str)
          (trim-newline))))
 
+(defn ensure-event-id [evt]
+  (if (nil? (:id evt))
+    (assoc evt :id (generate-id))
+    evt))
 
-(defprotocol PMap
-  (->map [this]))
-
-(defrecord MidiLyricsEvent [text ticks])
 
 (defrecord MidiLyricsFrame [events ticks])
 (defrecord MidiSimpleLyricsFrame [frame])
 
 (declare frame-text)
 (extend-protocol PMap
-  MidiLyricsEvent
-  (->map [this]
-    {:type :lyrics-event
-     :offset (:offset this)
-     :ticks (:ticks this)
-     :text (:text this)})
+  ;; MidiLyricsEvent
+  ;; (->map [this]
+  ;;   {:type      :lyrics-event
+  ;;    :offset    (:offset this)
+  ;;    :ticks     (:ticks this)
+  ;;    :text      (:text this)
+  ;;    :midi-type (:midi-type this)})
 
   MidiLyricsFrame
   (->map [this]
-    {:type :frame-event
-     :ticks (:ticks this)
+    {:type   :frame-event
+     :ticks  (:ticks this)
      :events (map ->map (:events this))
      :offset (:offset (first (:events this)))})
   MidiSimpleLyricsFrame
   (->map [this]
-    {:text (frame-text (:frame this))
-     :ticks (-> this :frame :ticks)
-     :offset (-> this :frame :events first :offset)
+    {:text          (frame-text (:frame this))
+     :ticks         (-> this :frame :ticks)
+     :offset        (-> this :frame :events first :offset)
      :event_offsets (map
                      (fn [evt]
-                       {:offset (:offset evt)
+                       {:offset     (:offset evt)
                         :char_count (count (:text evt))})
                      (-> this :frame :events))}))
 
 
+(extend-protocol POffset
+  MidiSimpleLyricsFrame
+  (with-offset [this offset]
+    (-> this
+        (update-in
+         [:frame :events]
+         (fn [evts]
+           (map
+            (fn [evt]
+              (-> evt
+                  (update :offset + offset)))
+            evts))))))
+
 (defn tick-time [sequencer sequence]
-  (let [bpm (.getTempoInBPM sequencer)
-        ppq (if (pos? Sequence/PPQ)
-              Sequence/PPQ
-              (.getResolution sequence))
-        delta (/ 60000.0 (* bpm ppq))]
+  (let [bpm   (.getTempoInBPM sequencer)
+        division-type (.getDivisionType sequence)
+        ticks-sec   (condp = division-type
+                      Sequence/PPQ
+                      (* (.getResolution sequence) (/ bpm 60.0))
+                      (* division-type (.getResolution sequence)))
+        delta (/ 1000.0 ticks-sec)]
     (fn [tick]
       (* delta tick))))
 
+(defn meta-messages
+  [^Sequence sequence ^Sequencer sequencer]
+  (.setSequence sequencer sequence)
+  (.addMetaEventListener sequencer (MyEvListener.))
+  (.play sequencer))
+
+(defn file-meta-messages [filename]
+  (with-open [in (input-stream filename)]
+    (let [sequencer (MidiSystem/getSequencer)
+          sequence (MidiSystem/getSequence in)]
+      (meta-messages sequence sequencer))))
+
+
+(defn getInterestingEvents [^Track t]
+  (let [evt-count (.size t)]
+    (for [evt-id (range evt-count)
+          :let [evt (.get t evt-id)
+                msg (.getMessage evt)
+                offset (.getTick evt)
+                midi-type (.getType msg)]
+          :when (and (pos? offset)
+                     (= (type msg) MetaMessage)
+                     (#{1 5} midi-type))]
+      (-> (create-lyrics-event :text (event-text msg)
+                               :ticks offset
+                               :midi-type midi-type)
+          (set-event-id)))))
 (defn lyrics-events
-  ([sequence sequencer]
-   (let [tracks (.getTracks sequence)
-         tick-fn (tick-time sequencer sequence)
-         msgs (apply concat
-                     (for [t tracks :let [event-count (.size t)]]
-                       (for [event-id (range event-count)
-                             :let [evt (.get t event-id)
-                                   msg (.getMessage evt)
-                                   offset (.getTick evt)]
-                             :when (and
-                                    (> offset 0)
-                                    (instance? MetaMessage msg)
-                                    (or
-                                     ;; (= (.getType msg) 1)
-                                     (= (.getType msg) 5)))]
-                         (->MidiLyricsEvent (event-text msg) offset))))
+  ([^Sequence sequence ^Sequencer sequencer]
+   (let [tracks      (.getTracks sequence)
+         tick-fn     (tick-time sequencer sequence)
+         msgs        (apply concat
+                            (for [^Track t tracks]
+                                  ;; :let     [event-count (.size t)]]
+                              (getInterestingEvents t)))
          sorted-msgs (sort-by :ticks msgs)]
-     (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs)))
-  ([sequence]
-   (lyrics-events sequence 192)))
+     (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs))))
+  ;; ([^Sequence sequence]
+   ;; (lyrics-events sequence 192)))
 
 (defn clean-frame? [evt]
   (empty? (:text evt)))
@@ -112,10 +159,10 @@
       res
       (let [frame-start (-> (first events)
                             clean-start-of-frame)
-            grp (concat
-                 [frame-start]
-                 (take-while (comp not start-of-frame?) (rest events)))
-            remaining (drop-while (comp not start-of-frame?) (rest events))]
+            grp         (concat
+                         [frame-start]
+                         (take-while (comp not start-of-frame?) (rest events)))
+            remaining   (drop-while (comp not start-of-frame?) (rest events))]
         (recur (conj res grp) remaining)))))
 
 (defn lyrics-frames [evts]
@@ -132,35 +179,35 @@
 
 (defn play-file  [file-path]
   (let [sequencer (MidiSystem/getSequencer)
-        sequence (MidiSystem/getSequence (file file-path))]
+        sequence  (MidiSystem/getSequence (file file-path))]
     (doto sequencer
       (.open)
       (.setSequence sequence))
-    (let [evts (lyrics-events sequence sequencer)
-          frames (lyrics-frames evts)
-          tick-fn (tick-time sequencer sequence)
+    (let [evts     (lyrics-events sequence sequencer)
+          frames   (lyrics-frames evts)
+          tick-fn  (tick-time sequencer sequence)
           out-chan (chan)
-          tos    (->>
-                  (for [f (vec frames)]
-                    (async/go
+          tos      (->>
+                    (for [f (vec frames)]
+                     (async/go
                       (async/<! (async/timeout (tick-fn (:ticks f))))
                       (async/>! out-chan f)))
-                  (into []))]
+                    (into []))]
       (.start sequencer)
-      {:timeouts tos
-       :out-chan out-chan
+      {:timeouts  tos
+       :out-chan  out-chan
        :sequencer sequencer
-       :sequence sequence
-       :frames frames})))
+       :sequence  sequence
+       :frames    frames})))
 
 (defn load-lyrics-from-midi [midi-file]
   (with-open [in (input-stream midi-file)]
     (try
-      (let [sequence (MidiSystem/getSequence in)
+      (let [sequence  (MidiSystem/getSequence in)
             sequencer (doto (MidiSystem/getSequencer)
-                       (.open)
-                       (.setSequence sequence))
-            frames (lyrics-frames (lyrics-events sequence sequencer))]
+                        (.open)
+                        (.setSequence sequence))
+            frames    (lyrics-frames (lyrics-events sequence sequencer))]
         (.close sequencer)
         frames)
       (catch Exception e
@@ -171,11 +218,11 @@
 
 
 (defn save-lyrics [midi-file-path output-file]
-  (let [frames (load-lyrics-from-midi midi-file-path)
+  (let [frames     (load-lyrics-from-midi midi-file-path)
         output-str (pr-str (map ->map frames))]
     (spit output-file output-str)))
 
 (defn deserialize-lyrics [lyrics-file]
-  (let [reader-map {'clj_karaoke.lyrics.MidiLyricsEvent map->MidiLyricsEvent
+  (let [reader-map {'clj_karaoke.lyrics.MidiLyricsEvent levent/map->MidiLyricsEvent
                     'clj_karaoke.lyrics.MidiLyricsFrame map->MidiLyricsFrame}]
     (edn/read-string {:readers reader-map} (slurp lyrics-file))))

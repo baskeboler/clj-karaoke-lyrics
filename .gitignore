@@ -9,3 +9,15 @@ pom.xml.asc
 /.nrepl-port
 .hgignore
 .hg/
+
+lyrics/
+
+lyrics2/
+
+lyrics3/
+
+new-midis/
+
+new-midis2/
+
+out-lyrics/
