@@ -158,11 +158,10 @@
     (map #(.getAbsolutePath ^File %) midi-files)))
 
 (defn extract-lyrics-from-input-directory [input-dir output-dir format offset]
-  ;; (assert (contains? valid-formats format))
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
     (r/fold
-     16
+     32
      (fn
        ([] [])
        ([& r] (apply concat r)))
