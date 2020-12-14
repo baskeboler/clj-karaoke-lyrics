@@ -2,12 +2,14 @@
   (:require   [clj-cli-progress.core :as progress :refer [progress-bar-wrapped-collection]]
               [clj-karaoke.lyrics :as l]
               [clj-karaoke.protocols :as p]
+              [clj-karaoke.song-data :as sd :refer [create-song-data]]
               ;; [clojure.core.async :as async :refer [>! <! go go-loop chan]]
               [clojure.core.reducers :as r]
               [clojure.java.io :as io]
               [clojure.data.json :as json]
               [clojure.tools.cli :refer [parse-opts]]
-              [clojure.string :as str])
+              [clojure.string :as str]
+              [clojure.string :as cstr])
   (:import [java.io File])
   (:gen-class))
 
@@ -57,7 +59,7 @@
       :else
       {:exit-message (usage summary)})))
 (declare extract-lyrics-from-file)
-(declare extract-lyrics-from-input-directory)
+(declare extract-lyrics-from-input-directory extract-song-data-from-input-directory)
 
 (defn -main [& args]
   (let [options                  (parse-opts args opts)
@@ -68,7 +70,7 @@
         (println (:summary options))
         (some? (-> options :options :input-dir))
         ;; (do
-        (extract-lyrics-from-input-directory
+        (extract-song-data-from-input-directory
          (get-in options [:options :input-dir])
          (get-in options [:options :output-dir])
          (get-in options [:options :type])
@@ -161,7 +163,6 @@
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
     (r/fold
-     4
      (fn
        ([] [])
        ([& r] (apply concat r)))
@@ -185,5 +186,29 @@
              (conj res out-path))
            (do
              ;; (println "Skipping " file-name ", empty frames")
+             res))))
+     wrapped)))
+(defn extract-song-data-from-input-directory [input-dir output-dir format offset]
+  (let [input-files (filter-midis input-dir)
+        wrapped (progress-bar-wrapped-collection input-files "midi files")]
+    (r/fold
+     (fn
+       ([] [])
+       ([& r] (apply concat r)))
+     (fn [res f]
+       (let [file-name (cstr/replace f (re-pattern input-dir) "")
+             file-extension (case format
+                              :edn ".edn"
+                              :json ".json")
+             out-file-name (cstr/replace file-name #".mid" file-extension)
+             out-path (str output-dir "/" out-file-name)
+             song (l/load-song-data-from-midi f)]
+         (if-not (empty? (:frames song))
+           (do
+             (case format
+               :edn (spit out-path (pr-str song))
+               :json (spit out-path (json/json-str song)))
+             (conj res out-path))
+           (do
              res))))
      wrapped)))

@@ -1,6 +1,8 @@
 (ns clj-karaoke.midi
   (:require [clj-karaoke.protocols :refer [PMidiReader
-                                           get-tick-time get-lyrics-events]]
+                                           get-tick-time get-lyrics-events
+                                           get-resolution get-tempo-bpm
+                                           get-division-type]]
             [clj-karaoke.lyrics-event :refer [create-lyrics-event]]
             [clj-karaoke.lyrics-frame :as lframe]
             [clojure.core.async :as async]
@@ -82,7 +84,10 @@
       :out-chan  out-chan
       :sequencer midi-sequencer
       :sequence  midi-sequence 
-      :frames    frames})))
+      :frames    frames}))
+  (get-resolution [this] (.getResolution midi-sequence))
+  (get-tempo-bpm [this] (. midi-sequencer (getTempoInBPM)))
+  (get-division-type [this] (. midi-sequence (getDivisionType))))
 ;; (get-midi-events [this]))
 
 

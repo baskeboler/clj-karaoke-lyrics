@@ -1,13 +1,15 @@
 (ns clj-karaoke.lyrics
   (:require [clojure.string :refer [replace-first trim-newline join starts-with?]]
             [clojure.edn :as edn]
-            [clojure.java.io :refer [file input-stream]]
+            [clojure.java.io :refer [file input-stream] :as io]
             [clj-karaoke.protocols :refer [->map with-offset PMap POffset]]
             [clojure.core.async :as async :refer [<! >! go go-loop chan]]
             [clj-karaoke.lyrics-event :as levent :refer [create-lyrics-event]]
             [clj-karaoke.lyrics-frame :as lframe]
             [clj-karaoke.midi :as midi]
-            [clj-karaoke.protocols :as p])
+            [clj-karaoke.song-data :as song-data]
+            [clj-karaoke.protocols :as p]
+            [clojure.string :as cstr])
   (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage MidiMessage]
            [java.lang String]
            [java.io File]))
@@ -117,6 +119,30 @@
       (catch Exception e
         (println (.getMessage e))
         (println "Failed to load lyrics from " midi-file)
+        []))))
+
+(defn load-song-data-from-midi [midi-file]
+  (with-open [in (input-stream midi-file)]
+    (try
+      (let [mreader       (midi/create-midi-reader in)
+            frames        (lframe/lyrics-frames (p/get-lyrics-events mreader))
+            bpm           (p/get-tempo-bpm mreader)
+            resolution    (p/get-resolution mreader)
+            title         (cstr/replace (-> (io/as-file midi-file)
+                                            (.getName))
+                                        #".mid"
+                                        "")
+            division-type (p/get-division-type mreader)
+            song-data     (song-data/create-song-data :title title
+                                                      :tempo-bpm bpm
+                                                      :division-type division-type
+                                                      :resolution resolution
+                                                      :frames frames)]
+        (p/close-midi-reader mreader)
+        song-data)
+      (catch Exception e
+        (println (.getMessage e))
+        (println "Failed to load song data from " midi-file)
         []))))
 
 (defn save-lyrics [midi-file-path output-file]
