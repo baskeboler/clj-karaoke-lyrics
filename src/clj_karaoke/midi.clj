@@ -10,6 +10,7 @@
   (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage MidiMessage]
            [java.lang String]
            [java.io File]))
+
 (def generate-id (comp str gensym))
 
 (defn set-event-id
@@ -17,14 +18,13 @@
   (if (nil? (:id evt))
     (assoc evt :id (generate-id))
     evt))
+
 (defn event-text [^MetaMessage evt]
   (let [msg (.getMessage evt)]
     (->> (String. (bytes msg))
          (drop 3)
          (apply str)
          (trim-newline))))
-
-
 
 (defn tick-time [sequencer sequence]
   (let [bpm   (.getTempoInBPM sequencer)
@@ -88,7 +88,6 @@
   (get-resolution [this] (.getResolution midi-sequence))
   (get-tempo-bpm [this] (. midi-sequencer (getTempoInBPM)))
   (get-division-type [this] (. midi-sequence (getDivisionType))))
-;; (get-midi-events [this]))
 
 
 (defn ^:export create-midi-reader [file]
