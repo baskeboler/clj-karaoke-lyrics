@@ -1,4 +1,4 @@
-(defproject baskeboler/clj-karaoke-lyrics "1.0.1-SNAPSHOT"
+(defproject baskeboler/clj-karaoke-lyrics "1.0.2-SNAPSHOT"
   :description "Rip karaoke lyrics from karaoke midi files"
   :url "http://github.com/baskeboler/clj-karaoke-lyrics.git"
   :scm {:name "git" 
