@@ -161,7 +161,7 @@
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
     (r/fold
-     32
+     4
      (fn
        ([] [])
        ([& r] (apply concat r)))

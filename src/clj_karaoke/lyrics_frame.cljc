@@ -8,7 +8,7 @@
          {:type   :frame-event
           :ticks  (:ticks this)
           :events (map ->map (:events this))
-          :offset (:offset (first (:events this)))}))
+          :offset (:offset this)}))
 
 
 
@@ -76,5 +76,14 @@
     (map (fn [gr]
            (->
             (->MidiLyricsFrame gr (-> gr first :ticks))
-            (assoc :offset (:offset (first gr)))))
+            (assoc :offset (-> gr first :offset))
+            (update :events
+                    (fn [evts]
+                      (let [base-offset (-> gr first :offset)
+                            base-ticks (-> gr first :ticks)]
+                        (map (fn [evt]
+                               (-> evt
+                                   (update :ticks #(- % base-ticks))
+                                   (update :offset #(- % base-offset))))
+                             evts))))))
          grps)))

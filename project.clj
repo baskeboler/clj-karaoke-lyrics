@@ -10,7 +10,9 @@
                  [clj-cli-progress "0.1.0"]]
   :main ^:skip-aot clj-karaoke.core
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all #_[clj-karaoke.core clj-karaoke.karaoke clj-karaoke.lyrics]}}
+  :profiles {:uberjar {:aot [clj-karaoke.core clj-karaoke.karaoke clj-karaoke.lyrics
+                             clj-karaoke.lyrics-event clj-karaoke.lyrics-frame 
+                             clj-karaoke.protocols clj-karaoke.midi]}}
   :repositories
   {"clojars" {:url "https://clojars.org/repo"
               :sign-releases false

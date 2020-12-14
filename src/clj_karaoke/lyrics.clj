@@ -5,12 +5,12 @@
             [clj-karaoke.protocols :refer [->map with-offset PMap POffset]]
             [clojure.core.async :as async :refer [<! >! go go-loop chan]]
             [clj-karaoke.lyrics-event :as levent :refer [create-lyrics-event]]
-            [clj-karaoke.lyrics-frame :as lframe])
+            [clj-karaoke.lyrics-frame :as lframe]
+            [clj-karaoke.midi :as midi]
+            [clj-karaoke.protocols :as p])
   (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage MidiMessage]
            [java.lang String]
            [java.io File]))
-
-
 
 (def generate-id (comp str gensym))
 
@@ -29,8 +29,6 @@
                   (drop 3)
                   (apply str)))))
 
-
-
 (defn event-text [^MetaMessage evt]
   (let [msg (.getMessage evt)]
     (->> (String. (bytes msg))
@@ -42,7 +40,6 @@
   (if (nil? (:id evt))
     (assoc evt :id (generate-id))
     evt))
-
 
 (declare frame-text)
 
@@ -69,7 +66,6 @@
           sequence (MidiSystem/getSequence in)]
       (meta-messages sequence sequencer))))
 
-
 (defn getInterestingEvents [^Track t]
   (let [evt-count (.size t)]
     (for [evt-id (range evt-count)
@@ -83,58 +79,45 @@
                                :ticks offset
                                :midi-type (.getType msg))
           (set-event-id)))))
-(defn lyrics-events
-  ([^Sequence sequence ^Sequencer sequencer]
-   (let [tracks      (.getTracks sequence)
-         tick-fn     (tick-time sequencer sequence)
-         msgs        (apply concat
-                            (for [^Track t tracks]
-                              (getInterestingEvents t)))
-         sorted-msgs (sort-by :ticks msgs)]
-     (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs))))
+
+(defn track-meta-message-events
+  [^Track track]
+  (let [evt-count (.size track)]
+    (for [evt-id (range evt-count)
+          :let [evt (.get track evt-id)
+                msg (.getMessage evt)
+                offset (.getTick evt)]
+          :when (and (pos? offset)
+                     (= MetaMessage (.getType msg)))]
+      evt)))
 
 
+;; (defn lyrics-events
+;;   ([^Sequence sequence ^Sequencer sequencer]
+;;    (let [tracks      (.getTracks sequence)
+;;          tick-fn     (tick-time sequencer sequence)
+;;          msgs        (apply concat
+;;                             (for [^Track t tracks]
+;;                               (getInterestingEvents t)))
+;;          sorted-msgs (sort-by :ticks msgs)]
+;;      (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs))))
 
 
 (defn play-file  [file-path]
-  (let [sequencer (MidiSystem/getSequencer)
-        sequence  (MidiSystem/getSequence (file file-path))]
-    (doto sequencer
-      (.open)
-      (.setSequence sequence))
-    (let [evts     (lyrics-events sequence sequencer)
-          frames   (lframe/lyrics-frames evts)
-          tick-fn  (tick-time sequencer sequence)
-          out-chan (chan)
-          tos      (->>
-                    (for [f (vec frames)]
-                     (async/go
-                      (async/<! (async/timeout (tick-fn (:ticks f))))
-                      (async/>! out-chan f)))
-                    (into []))]
-      (.start sequencer)
-      {:timeouts  tos
-       :out-chan  out-chan
-       :sequencer sequencer
-       :sequence  sequence
-       :frames    frames})))
+  (let [reader (midi/create-midi-reader (file file-path))]
+    (p/play-midi reader)))
 
 (defn load-lyrics-from-midi [midi-file]
   (with-open [in (input-stream midi-file)]
     (try
-      (let [sequence  (MidiSystem/getSequence in)
-            sequencer (doto (MidiSystem/getSequencer)
-                        (.open)
-                        (.setSequence sequence))
-            frames    (lframe/lyrics-frames (lyrics-events sequence sequencer))]
-        (.close sequencer)
+      (let [mreader (midi/create-midi-reader in)
+            frames    (lframe/lyrics-frames (p/get-lyrics-events mreader))]
+        (p/close-midi-reader mreader)
         frames)
       (catch Exception e
-       (println (.getMessage e))
-       (println "Failed to load lyrics from " midi-file)
-       []))))
-
-
+        (println (.getMessage e))
+        (println "Failed to load lyrics from " midi-file)
+        []))))
 
 (defn save-lyrics [midi-file-path output-file]
   (let [frames     (load-lyrics-from-midi midi-file-path)
