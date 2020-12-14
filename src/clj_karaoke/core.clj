@@ -58,7 +58,7 @@
       {:action :process-file :options options :input input-file :output output-file}
       :else
       {:exit-message (usage summary)})))
-(declare extract-lyrics-from-file)
+(declare extract-lyrics-from-file extract-song-data-from-file)
 (declare extract-lyrics-from-input-directory extract-song-data-from-input-directory)
 
 (defn -main [& args]
@@ -77,7 +77,7 @@
          (get-in options [:options :offset]))
         :else
         (do
-          (extract-lyrics-from-file
+          (extract-song-data-from-file
            input-file
            output-file
            (-> options :options :type)
@@ -120,6 +120,20 @@
           :json (spit output (json/json-str (map p/->map wrapped))))
         (println "Done! generated " output))
       (println "Skipping " input ", empty frames"))))
+
+(defn extract-song-data-from-file
+  [input output format offset]
+  (let [song (l/load-song-data-from-midi input)
+        wrapped (progress-bar-wrapped-collection
+                 (:frames song)
+                 "frames")]
+    (if-not (empty? (:frames song))
+      (do
+        (case format
+          :edn (spit output (pr-str (p/->map song)))
+          :json (spit output (json/json-str (p/->map song))))
+        (println "done! generated " output))
+      (println "skipping " input ", empty frames")))) 
 
 #_(defn extract-lyrics-2
     ([midi-dir output-dir]
@@ -206,8 +220,8 @@
          (if-not (empty? (:frames song))
            (do
              (case format
-               :edn (spit out-path (pr-str song))
-               :json (spit out-path (json/json-str song)))
+               :edn (spit out-path (pr-str (p/->map song)))
+               :json (spit out-path (json/json-str (p/->map song))))
              (conj res out-path))
            (do
              res))))

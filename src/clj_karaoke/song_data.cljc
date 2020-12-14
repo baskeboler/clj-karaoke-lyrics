@@ -1,6 +1,7 @@
 (ns clj-karaoke.song-data
   (:require [tick.core :as t]
-            [clojure.string :as cstr]))
+            [clojure.string :as cstr]
+            [clj-karaoke.protocols :as p :refer [PMap ->map]]))
 
 (def division-types
   {:PPQ          0.0
@@ -20,8 +21,16 @@
     (fn [ticks]
       (* delta ticks))))
 
-(defrecord SongData [title date frames tempo-bpm division-type resolution])
-
+(defrecord SongData [title date frames tempo-bpm division-type resolution]
+  PMap
+  (->map [this]
+    {:title         title
+     :date          date
+     :type          :song-data
+     :tempo-bpm     tempo-bpm
+     :division-type division-type
+     :resolution    resolution
+     :frames        (map ->map frames)}))
 
 (defn create-song-data
   "Creates a song data object that includes:
@@ -40,3 +49,4 @@
   (assert (and (not (cstr/blank? title))
                (seq? frames)))
   (->SongData title date frames tempo-bpm division-type resolution))
+
