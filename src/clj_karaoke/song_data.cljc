@@ -1,7 +1,10 @@
 (ns clj-karaoke.song-data
   (:require [tick.core :as t]
             [clojure.string :as cstr]
-            [clj-karaoke.protocols :as p :refer [PMap ->map map->]]
+            [clj-karaoke.protocols :as p :refer [PMap ->map map-> PSong
+                                                 PLyrics get-current-frame
+                                                 get-text get-offset played?
+                                                 get-next-event]]
             [clj-karaoke.lyrics-frame] ; make sure these map-> imeplementations are available
             [clj-karaoke.lyrics-event]))
 
@@ -32,7 +35,31 @@
      :tempo-bpm     tempo-bpm
      :division-type division-type
      :resolution    resolution
-     :frames        (map ->map frames)}))
+     :frames        (map ->map frames)})
+  PSong
+  (get-current-frame [this offset]
+    (->> this
+         :frames
+         (filter (comp not played?))
+         first))
+  PLyrics
+  (get-text [this]
+    (apply str (map get-text frames)))
+  (get-offset [this] 0)
+  (played? [this offset]
+    (let [last-frame        (-> frames last)
+          last-frame-offset (get-offset last-frame)
+          last-evt          (-> last-frame :events last)
+          last-evt-offset   (-> last-evt :offset (+ last-frame-offset))]
+      (> offset last-evt-offset)))
+  (get-next-event [this offset]
+    (let [current-frame (get-current-frame this offset)]
+      (-> (filter #(> (+ (get-offset current-frame)
+                         (get-offset %))
+                      offset)
+                  (:events current-frame))
+          first))))
+    
 
 (defn create-song-data
   "Creates a song data object that includes:

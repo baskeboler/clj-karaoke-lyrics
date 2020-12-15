@@ -2,13 +2,11 @@
   (:require   [clj-cli-progress.core :as progress :refer [progress-bar-wrapped-collection]]
               [clj-karaoke.lyrics :as l]
               [clj-karaoke.protocols :as p]
-              [clj-karaoke.song-data :as sd :refer [create-song-data]]
-              ;; [clojure.core.async :as async :refer [>! <! go go-loop chan]]
+              [clj-karaoke.song-data]
               [clojure.core.reducers :as r]
               [clojure.java.io :as io]
               [clojure.data.json :as json]
               [clojure.tools.cli :refer [parse-opts]]
-              [clojure.string :as str]
               [clojure.string :as cstr])
   (:import [java.io File])
   (:gen-class))
@@ -37,11 +35,11 @@
        ""
        "Options:"
        summary]
-      (str/join \newline)))
+      (cstr/join \newline)))
 
 (defn error-msg [errors]
   (str "The following errors occured:\n\n"
-       (str/join \newline errors)))
+       (cstr/join \newline errors)))
 
 (defn process-opts [args]
   (let [{:keys [arguments errors summary options]}      (parse-opts args opts)
@@ -181,11 +179,11 @@
        ([] [])
        ([& r] (apply concat r)))
      (fn [res f]
-       (let [file-name (clojure.string/replace f (re-pattern input-dir) "")
+       (let [file-name (cstr/replace f (re-pattern input-dir) "")
              file-extension (case format
                               :edn ".edn"
                               :json ".json")
-             out-file-name (clojure.string/replace file-name #".mid" file-extension)
+             out-file-name (cstr/replace file-name #".mid" file-extension)
              out-path (str output-dir "/" out-file-name)
              frames
              ;; (map

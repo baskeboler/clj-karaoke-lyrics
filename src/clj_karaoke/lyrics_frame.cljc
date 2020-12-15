@@ -15,11 +15,10 @@
           :events (map ->map (:events this))
           :offset (:offset this)})
   PLyrics
-  (get-text [this] (frame-text this))
+  (get-text [this] (apply str (map get-text events)))
   (get-offset [this] (:offset this))
   (played? [this time]
-    (let [last-offset (->> this
-                           :events
+    (let [last-offset (->> events
                            last
                            :offset
                            (+ (get-offset this)))]
