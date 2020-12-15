@@ -1,5 +1,5 @@
 (ns clj-karaoke.lyrics-frame
-  (:require [clj-karaoke.protocols :as p :refer [PMap POffset ->map with-offset
+  (:require [clj-karaoke.protocols :as p :refer [PMap POffset ->map with-offset map->
                                                  PLyrics PSong get-text get-offset played?
                                                  get-next-event get-current-frame]]
             [clojure.string :as cstr :refer [starts-with? replace-first]]))
@@ -107,3 +107,8 @@
                                    (update :offset #(- % base-offset))))
                              evts))))))
          grps)))
+
+(defmethod map-> :frame-event
+  [{:keys [ticks events offset]}]
+  (-> (->MidiLyricsFrame (map map-> events) ticks)
+      (assoc :offset offset)))

@@ -1,7 +1,9 @@
 (ns clj-karaoke.song-data
   (:require [tick.core :as t]
             [clojure.string :as cstr]
-            [clj-karaoke.protocols :as p :refer [PMap ->map]]))
+            [clj-karaoke.protocols :as p :refer [PMap ->map map->]]
+            [clj-karaoke.lyrics-frame] ; make sure these map-> imeplementations are available
+            [clj-karaoke.lyrics-event]))
 
 (def division-types
   {:PPQ          0.0
@@ -50,3 +52,7 @@
                (seq? frames)))
   (->SongData title date frames tempo-bpm division-type resolution))
 
+(defmethod map-> :song-data [m]
+  (-> m
+      (update :frames (partial map map->))
+      (map->SongData)))

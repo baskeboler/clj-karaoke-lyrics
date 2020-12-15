@@ -3,6 +3,8 @@
 (defprotocol PMap
   (->map [this]))
 
+(defmulti map-> :type)
+
 (defprotocol POffset
   (with-offset [this offset]))
 
