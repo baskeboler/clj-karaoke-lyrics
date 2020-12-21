@@ -24,4 +24,5 @@
   (get-next-event [this offset]))
 
 (defprotocol PSong
-  (get-current-frame [this offset]))
+  (get-current-frame [this offset])
+  (get-song-length [this]))

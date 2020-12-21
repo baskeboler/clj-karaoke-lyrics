@@ -26,6 +26,13 @@
     (fn [ticks]
       (* delta ticks))))
 
+(defn estimated-song-length [s]
+  (let [last-frame (last (:frames s))
+        last-event (last (:events last-frame))]
+    (+ (p/get-offset last-frame)
+       (p/get-offset last-event)
+       5000)))
+
 (defrecord SongData [title date frames tempo-bpm division-type resolution]
   PMap
   (->map [this]
@@ -40,8 +47,9 @@
   (get-current-frame [this offset]
     (->> this
          :frames
-         (filter (comp not played?))
+         (filter (comp not #(played? % offset)))
          first))
+  (get-song-length [this] (estimated-song-length this))
   PLyrics
   (get-text [this]
     (apply str (map get-text frames)))
@@ -81,5 +89,5 @@
 
 (defmethod map-> :song-data [m]
   (-> m
-      (update :frames (partial map map->))
+      (update :frames (partial mapv map->))
       (map->SongData)))

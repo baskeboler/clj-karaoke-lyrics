@@ -7,6 +7,7 @@
               [clojure.java.io :as io]
               [clojure.data.json :as json]
               [clojure.tools.cli :refer [parse-opts]]
+              [clojure.spec.alpha :as s]
               [clojure.string :as cstr])
   (:import [java.io File])
   (:gen-class))

@@ -2,18 +2,37 @@
   (:require [clj-karaoke.protocols :as p :refer [PMap POffset ->map with-offset map->
                                                  PLyrics PSong get-text get-offset played?
                                                  get-next-event get-current-frame]]
-            [clojure.string :as cstr :refer [starts-with? replace-first]]))
+            [clj-karaoke.lyrics-event :as events]
+            [clojure.string :as cstr :refer [starts-with? replace-first]]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as gen]))
 
+(s/def ::id string?)
+(s/def :clj-karaoke.lyrics-frame.frame/events (s/coll-of ::events/lyrics-event))
 
+(s/def :clj-karaoke.lyrics-frame.frame-map/events (s/coll-of ::events/lyrics-event-map))
+(s/def ::offset (s/and number? (s/or :zero zero? :positive pos?)))
+(s/def ::ticks (s/and int? (s/or :zero zero? :positive pos-int?))) 
+(s/def ::type #{:frame-event})
+(s/def ::lyrics-frame (s/keys :req-un [:clj-karaoke.lyrics-frame.frame/events
+                                       ::ticks]
+                              :opt-un [::offset ::id]))
+
+(s/def ::lyrics-frame-map (s/merge ::lyrics-frame
+                                   (s/keys :req-un [::type
+                                                    :clj-karaoke.lyrics-frame.frame-map/events])))
+
+(def generate-id (comp str gensym))
 (declare frame-text)
 
 (defrecord MidiLyricsFrame [events ticks]
   PMap
   (->map [this]
-         {:type   :frame-event
-          :ticks  (:ticks this)
-          :events (map ->map (:events this))
-          :offset (:offset this)})
+    {:type   :frame-event
+     :id     (:id this)
+     :ticks  (:ticks this)
+     :events (map ->map (:events this))
+     :offset (:offset this)})
   PLyrics
   (get-text [this] (apply str (map get-text events)))
   (get-offset [this] (:offset this))
@@ -29,25 +48,21 @@
          (filter #(< offset (+ (get-offset this) (get-offset %))))
          first)))
 
-
-
 (defn frame-text [frame]
   (let [evts-text (mapv :text (:events frame))]
     (apply str evts-text)))
 
-
-
 (defrecord MidiSimpleLyricsFrame [frame]
   PMap
   (->map [this]
-         {:text          (frame-text (:frame this))
-          :ticks         (-> this :frame :ticks)
-          :offset        (-> this :frame :events first :offset)
-          :event_offsets (map
-                          (fn [evt]
-                            {:offset     (:offset evt)
-                             :char_count (count (:text evt))})
-                          (-> this :frame :events))})
+    {:text          (frame-text (:frame this))
+     :ticks         (-> this :frame :ticks)
+     :offset        (-> this :frame :events first :offset)
+     :event_offsets (map
+                     (fn [evt]
+                       {:offset     (:offset evt)
+                        :char_count (count (:text evt))})
+                     (-> this :frame :events))})
   POffset
   (with-offset [this offset]
     (-> this
@@ -59,8 +74,6 @@
               (-> evt
                   (update :offset + offset)))
             evts))))))
- 
-
 
 (defn clean-frame? [evt]
   (empty? (:text evt)))
@@ -76,7 +89,6 @@
                       (-> t
                           (replace-first #"\\" "")
                           (replace-first #"/" ""))))))
-
 
 (defn lyrics-events-grouped [evts]
   (loop [res [] events evts]
@@ -108,6 +120,26 @@
          grps)))
 
 (defmethod map-> :frame-event
-  [{:keys [ticks events offset]}]
-  (-> (->MidiLyricsFrame (map map-> events) ticks)
-      (assoc :offset offset)))
+  [{:keys [ticks events offset id] :or {id (generate-id)} :as frame-map}]
+  ;; {:pre [(s/valid? ::lyrics-frame-map frame-map)]
+   ;; :post [(s/valid? ::lyrics-frame %)]]
+  (-> (->MidiLyricsFrame (mapv map-> events) ticks)
+      (assoc :id id  :offset offset)))
+
+
+(defn split-frame-at [frame ms]
+  (let [{:keys [events ticks id offset]} frame
+        events-left (take-while #(< (get-offset %) ms) events)
+        events-right (drop (count events-left) events)
+        offset-right (-> events-right first :offset)
+        ticks-right (-> events-right first :ticks)
+        events-right (map (comp
+                           #(update % :offset - offset-right)
+                           #(update % :ticks - ticks-right))
+                          events-right)]
+    [(-> (->MidiLyricsFrame events-left ticks)
+         (assoc :offset offset
+                :id (generate-id)))
+     (-> (->MidiLyricsFrame events-right ticks-right)
+         (assoc :offset offset-right
+                :id (generate-id)))]))
