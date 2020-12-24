@@ -13,6 +13,7 @@
                  [tick "0.4.27-alpha"]
                  [metosin/spec-tools "0.10.4"]
                  [spec-provider "0.4.14"]
+                 [criterium "0.4.6"]
                  [time-literals "0.1.4"]
                  [clj-cli-progress "0.1.0"]]
   :main ^:skip-aot clj-karaoke.core

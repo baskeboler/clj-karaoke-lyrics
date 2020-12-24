@@ -3,7 +3,18 @@
 (defprotocol PMap
   (->map [this]))
 
-(defmulti map-> :type)
+(defn resolve-type [arg]
+  (cond
+    (map? arg) (:type arg)
+    (and
+     (seq? arg)
+     (every? #(and (map? %)
+                   (contains? % :type)
+                   (= :frame-event (:type %)))
+             arg))
+    :sequence-of-frames))
+
+(defmulti map-> resolve-type)
 
 (defprotocol POffset
   (with-offset [this offset]))
@@ -25,4 +36,6 @@
 
 (defprotocol PSong
   (get-current-frame [this offset])
-  (get-song-length [this]))
+  (get-song-length [this])
+  (validate [this])
+  (sanitize [this]))

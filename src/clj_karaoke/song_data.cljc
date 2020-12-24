@@ -4,7 +4,7 @@
             [clj-karaoke.protocols :as p :refer [PMap ->map map-> PSong
                                                  PLyrics get-current-frame
                                                  get-text get-offset played?
-                                                 get-next-event]]
+                                                 get-next-event validate sanitize]]
             [clj-karaoke.lyrics-frame] ; make sure these map-> imeplementations are available
             [clj-karaoke.lyrics-event]))
 
@@ -33,6 +33,15 @@
        (p/get-offset last-event)
        5000)))
 
+(defn get-events [song]
+  (apply concat (map :events (:frames song))))
+
+(defn midi-types [song]
+  (into #{} (map :midi-type (get-events song))))
+
+(defn midi-type-counts [song midi-type]
+  (count (filter #(= midi-type (:midi-type %)) (get-events song))))
+
 (defrecord SongData [title date frames tempo-bpm division-type resolution]
   PMap
   (->map [this]
@@ -47,9 +56,11 @@
   (get-current-frame [this offset]
     (->> this
          :frames
-         (filter (comp not #(played? % offset)))
+         (filterv (comp not #(played? % offset)))
          first))
   (get-song-length [this] (estimated-song-length this))
+  (validate [this] true)
+  (sanitize [this] this)
   PLyrics
   (get-text [this]
     (apply str (map get-text frames)))

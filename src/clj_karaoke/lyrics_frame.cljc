@@ -2,17 +2,30 @@
   (:require [clj-karaoke.protocols :as p :refer [PMap POffset ->map with-offset map->
                                                  PLyrics PSong get-text get-offset played?
                                                  get-next-event get-current-frame]]
-            [clj-karaoke.lyrics-event :as events]
+            [clj-karaoke.lyrics-event]
+            [clj-karaoke.lyrics-event-specs :as events-specs]
             [clojure.string :as cstr :refer [starts-with? replace-first]]
             [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as gen]))
 
 (s/def ::id string?)
-(s/def :clj-karaoke.lyrics-frame.frame/events (s/coll-of ::events/lyrics-event))
 
-(s/def :clj-karaoke.lyrics-frame.frame-map/events (s/coll-of ::events/lyrics-event-map))
+(defn sorted-fn [k]
+  (fn [col]
+    (let [sorted (sort-by k col)]
+      (= col sorted))))
+(s/def :clj-karaoke.lyrics-frame.frame/events (s/and (s/coll-of ::events-specs/lyrics-event :into [])
+                                                     (comp not empty?)
+                                                     (sorted-fn :offset)
+                                                     (sorted-fn :ticks)))
+
+(s/def :clj-karaoke.lyrics-frame.frame-map/events (s/and (s/coll-of ::events-specs/lyrics-event-map :into [])
+                                                         (comp not empty?)
+                                                         (sorted-fn :offset)
+                                                         (sorted-fn :ticks)))
+
 (s/def ::offset (s/and number? (s/or :zero zero? :positive pos?)))
-(s/def ::ticks (s/and int? (s/or :zero zero? :positive pos-int?))) 
+(s/def ::ticks (s/and int? (s/or :zero zero? :positive pos-int?)))
 (s/def ::type #{:frame-event})
 (s/def ::lyrics-frame (s/keys :req-un [:clj-karaoke.lyrics-frame.frame/events
                                        ::ticks]
@@ -41,7 +54,7 @@
                            last
                            :offset
                            (+ (get-offset this)))]
-      (>= last-offset time)))
+      (<= last-offset time)))
   (get-next-event [this offset]
     (->> this
          :events
@@ -126,20 +139,64 @@
   (-> (->MidiLyricsFrame (mapv map-> events) ticks)
       (assoc :id id  :offset offset)))
 
-
 (defn split-frame-at [frame ms]
-  (let [{:keys [events ticks id offset]} frame
-        events-left (take-while #(< (get-offset %) ms) events)
-        events-right (drop (count events-left) events)
-        offset-right (-> events-right first :offset)
-        ticks-right (-> events-right first :ticks)
-        events-right (map (comp
-                           #(update % :offset - offset-right)
-                           #(update % :ticks - ticks-right))
-                          events-right)]
+  (let [{:keys [events ticks  offset]} frame
+        events-left                    (take-while #(< (get-offset %) ms) events)
+        events-right                   (drop (count events-left) events)
+        offset-right                   (-> events-right (nth 0) :offset)
+        ticks-right                    (-> events-right (nth 0) :ticks)
+        events-right                   (map  (comp
+                                                #(update % :offset - offset-right)
+                                                #(update % :ticks - ticks-right))
+                                               events-right)]
     [(-> (->MidiLyricsFrame events-left ticks)
          (assoc :offset offset
                 :id (generate-id)))
-     (-> (->MidiLyricsFrame events-right ticks-right)
-         (assoc :offset offset-right
+     (-> (->MidiLyricsFrame events-right (+ ticks ticks-right))
+         (assoc :offset (+ offset offset-right)
                 :id (generate-id)))]))
+
+(defn frame-tick-duration [frame]
+  (-> frame :events last :ticks))
+(defn frame-ms-duration [frame]
+  (-> frame :events last :offset))
+
+(defn offsets? [frame]
+  (and (:offset frame)
+       (every? :offset (:events frame))))
+(defn sorted-events? [frame]
+  (let [sorted (sort-by :offset (:events frame))]
+    (= sorted (:events frame))))
+
+(def not-nil? (comp not nil?))
+(defn valid-frame? [frame]
+  (and
+   (not-nil? frame)
+   (offsets? frame)
+   (sorted-events? frame)))
+
+(defn overlaps? [i1 i2]
+  (let [[[_ y1] [x2 _]] (sort-by first [i1 i2])]
+    (> y1 x2)))
+
+(defn join-frames [f1 f2]
+  (let [[f1 f2] (sort-by :offset [f1 f2])]
+    (if (and (valid-frame? f1)
+             (valid-frame? f2)
+             (not (overlaps? [(p/get-offset f1) (+ (p/get-offset f1) (frame-ms-duration f1))]
+                             [(p/get-offset f2) (+ (p/get-offset f2) (frame-ms-duration f2))])))
+      (->MidiLyricsFrame
+       (concat
+             (:events f1)
+             (map  (comp
+                    #(update % :offset
+                             (fn [oldval]
+                               (+ oldval (:offset f2) (* -1 (:offset f1)))))
+                    #(update % :ticks
+                             (fn [oldval]
+                               (+ oldval (:ticks f2) (* -1 (:ticks f1))))))
+                   (:events f2)))
+       (:ticks f1)))))
+
+(defn veclast [^clojure.lang.PersistentVector v]
+  (nth v (-> v .length dec)))

@@ -3,20 +3,20 @@
                                            PLyrics get-text get-offset
                                            played? get-next-event
                                            map->]]
-            [clj-karaoke.lyrics-event-specs :as specs]
-            [clojure.spec.alpha :as s]))
+            [clj-karaoke.lyrics-event-specs :as specs]))
+            ;; [clojure.spec.alpha :as s]))
 
-(s/check-asserts false)
+;; (s/check-asserts false)
 
 (def generate-id (comp str gensym))
 
 (defn event->map
   "generate a map representation of the event"
   [this]
-  {:pre  [(s/and
-           (s/valid? ::specs/lyrics-event this))]
-           ;; (s/valid? #(= 'clj_karaoke.lyrics_event.MidiLyricsEvent (type %)) this))]
-   :post [(s/valid? ::specs/lyrics-event-map %)]}
+  ;; {:pre  [(s/and
+  ;;          (s/valid? ::specs/lyrics-event this))]
+  ;;          ;; (s/valid? #(= 'clj_karaoke.lyrics_event.MidiLyricsEvent (type %)) this))]
+  ;;  :post [(s/valid? ::specs/lyrics-event-map %)]}
 
   {:id        (:id this)
    :type      :lyrics-event
@@ -25,10 +25,6 @@
    :text      (:text this)
    :midi-type (:midi-type this)})
 
-(s/fdef event->map
-  :args (s/and  ::specs/lyrics-event)
-                ;; #(= 'clj_karaoke.lyrics_event.MidiLyricsEvent (type %)))
-  :ret ::specs/lyrics-event-map)
 
 
 (defrecord ^:export MidiLyricsEvent [text ticks midi-type]
@@ -52,21 +48,21 @@
              ticks     0
              id        (generate-id)
              offset    0}}]
-  {:pre  [(s/valid? ::specs/lyrics-event-map
-                    {:id        id
-                     :text      text
-                     :ticks     ticks
-                     :offset    offset
-                     :type      type
-                     :midi-type midi-type})]
-   :post [(s/valid? ::specs/lyrics-event %)]}
+  ;; {:pre  [(s/valid? ::specs/lyrics-event-map
+  ;;                   {:id        id
+  ;;                    :text      text
+  ;;                    :ticks     ticks
+  ;;                    :offset    offset
+  ;;                    :type      type
+  ;;                    :midi-type midi-type})]
+  ;;  :post [(s/valid? ::specs/lyrics-event %)]}
   (-> (->MidiLyricsEvent text ticks midi-type)
       (assoc :id id :offset offset)))
 
 (defmethod map-> :lyrics-event
   [{:keys [ticks text midi-type offset id]
-    :or   {id (generate-id)}
-    :as   evt}]
+    :or   {id (generate-id)}}]
   (-> (->MidiLyricsEvent text ticks midi-type)
       (assoc :offset offset
              :id id)))
+
