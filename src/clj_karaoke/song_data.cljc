@@ -1,12 +1,14 @@
 (ns clj-karaoke.song-data
   (:require [tick.core :as t]
             [clojure.string :as cstr]
-            [clj-karaoke.protocols :as p :refer [PMap ->map map-> PSong
+            [clj-karaoke.protocols :as p :refer [PMap ->map map-> PSong PSubtitles
                                                  PLyrics get-current-frame
                                                  get-text get-offset played?
-                                                 get-next-event validate sanitize]]
+                                                 get-next-event validate sanitize
+                                                 ->ass]]
             [clj-karaoke.lyrics-frame] ; make sure these map-> imeplementations are available
-            [clj-karaoke.lyrics-event]))
+            [clj-karaoke.lyrics-event]
+            [clj-karaoke.ass :as ass :refer [ass-string]]))
 
 (def division-types
   {:PPQ          0.0
@@ -77,7 +79,11 @@
                          (get-offset %))
                       offset)
                   (:events current-frame))
-          first))))
+          first)))
+  PSubtitles
+  (->ass [this]
+    (ass-string this)))
+
     
 
 (defn create-song-data

@@ -3,12 +3,12 @@
                                            PLyrics get-text get-offset
                                            played? get-next-event
                                            map->]]
-            [clj-karaoke.lyrics-event-specs :as specs]))
+            [clj-karaoke.utils :refer [generate-id ensure-id]]))
+            ;; [clj-karaoke.lyrics-event-specs :as specs]))
             ;; [clojure.spec.alpha :as s]))
 
 ;; (s/check-asserts false)
 
-(def generate-id (comp str gensym))
 
 (defn event->map
   "generate a map representation of the event"
@@ -64,5 +64,6 @@
     :or   {id (generate-id)}}]
   (-> (->MidiLyricsEvent text ticks midi-type)
       (assoc :offset offset
-             :id id)))
+             :id id)
+      (ensure-id)))
 

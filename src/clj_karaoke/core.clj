@@ -3,6 +3,10 @@
               [clj-karaoke.lyrics :as l]
               [clj-karaoke.protocols :as p]
               [clj-karaoke.song-data]
+              [clj-karaoke.midi]
+              [clj-karaoke.lyrics-frame]
+              [clj-karaoke.lyrics-event]
+              [clj-karaoke.ass :as ass]
               [clojure.core.reducers :as r]
               [clojure.java.io :as io]
               [clojure.data.json :as json]
@@ -14,13 +18,14 @@
 
 (set! *warn-on-reflection* true)
 ;; (set! ^:dynamic *print-length* nil)
-(def valid-formats #{:edn :json})
+(def valid-formats #{:edn :json :ass})
 (def opts
   [["-t" "--type TYPE" "Type of output"
-    :default :json
+    :default "json"
     :parse-fn {"json" :json
-               "edn" :edn}
-    :validate [#(contains? valid-formats %) "Type must be either json or edn"]]
+               "edn" :edn
+               "ass" :ass}
+    :validate [#(contains? valid-formats %) "Type must be either json, edn or ass"]]
    ["-z" "--offset NUMBER" "Lyrics offset"
     :default 0
     :parse-fn #(Integer/parseInt %)]
@@ -85,52 +90,31 @@
       (doseq [e (:errors options)]
         (println e)))))
 
-#_(defn extract-lyrics
-    ([midi-dir output-dir]
-     (let [files (filter-midis midi-dir)]
-       (doseq [f (vec files)]
-         :let [file-name (clojure.string/replace
-                          f
-                          (re-pattern midi-dir)
-                          "")
-               out-file-name (clojure.string/replace file-name #".mid" ".edn")
-               out-path (str output-dir "/" out-file-name)
-               absolute-path f
-               lyrics (l/load-lyrics-from-midi absolute-path)]
-         :when (not-empty lyrics)
-         (println "Processing " absolute-path)
-         (spit out-path (pr-str (map l/->map lyrics)))
-         (println "Done! Generated " out-path))))
-    ([midi-dir]
-     (extract-lyrics midi-dir "lyrics")))
-
-(defn extract-lyrics-from-file [input output format offset]
-  ;; (assert (contains? valid-formats format))
-  (let [frames
-        ;; (map l/->MidiSimpleLyricsFrame
-                     (l/load-lyrics-from-midi input)
-        wrapped (progress-bar-wrapped-collection
-                 frames ;; (map #(l/with-offset % offset) frames)
-                 "frames")]
-    (if-not (empty? frames)
-      (do
-        (case format
-          :edn  (spit output (pr-str (map p/->map wrapped)))
-          :json (spit output (json/json-str (map p/->map wrapped))))
-        (println "Done! generated " output))
-      (println "Skipping " input ", empty frames"))))
+;; (defn extract-lyrics-from-file [input output format offset]
+;;   ;; (assert (contains? valid-formats format))
+;;   (let [frames
+;;         ;; (map l/->MidiSimpleLyricsFrame
+;;                      (l/load-lyrics-from-midi input)
+;;         wrapped (progress-bar-wrapped-collection
+;;                  frames ;; (map #(l/with-offset % offset) frames)
+;;                  "frames")]
+;;     (if-not (empty? frames)
+;;       (do
+;;         (case format
+;;           :edn  (spit output (pr-str (map p/->map wrapped)))
+;;           :json (spit output (json/json-str (map p/->map wrapped))))
+;;         (println "Done! generated " output))
+;;       (println "Skipping " input ", empty frames"))))
 
 (defn extract-song-data-from-file
   [input output format offset]
-  (let [song (l/load-song-data-from-midi input)
-        wrapped (progress-bar-wrapped-collection
-                 (:frames song)
-                 "frames")]
+  (let [song    (l/load-song-data-from-midi input)]
     (if-not (empty? (:frames song))
       (do
         (case format
-          :edn (spit output (pr-str (p/->map song)))
-          :json (spit output (json/json-str (p/->map song))))
+          :edn  (spit output (pr-str (p/->map song)))
+          :json (spit output (json/json-str (p/->map song)))
+          :ass  (spit output (p/->ass song)))
         (println "done! generated " output))
       (println "skipping " input ", empty frames")))) 
 
@@ -172,35 +156,6 @@
         midi-files (filter is-midi? files)]
     (map #(.getAbsolutePath ^File %) midi-files)))
 
-(defn extract-lyrics-from-input-directory [input-dir output-dir format offset]
-  (let [input-files (filter-midis input-dir)
-        wrapped (progress-bar-wrapped-collection input-files "midi files")]
-    (r/fold
-     (fn
-       ([] [])
-       ([& r] (apply concat r)))
-     (fn [res f]
-       (let [file-name (cstr/replace f (re-pattern input-dir) "")
-             file-extension (case format
-                              :edn ".edn"
-                              :json ".json")
-             out-file-name (cstr/replace file-name #".mid" file-extension)
-             out-path (str output-dir "/" out-file-name)
-             frames
-             ;; (map
-                     ;; (comp  #(l/with-offset % offset)  l/->MidiSimpleLyricsFrame)
-             (l/load-lyrics-from-midi f)]
-         (if-not (empty? frames)
-           (do
-             (case format
-               :edn (spit out-path (pr-str (map p/->map frames)))
-               :json (spit out-path (json/json-str (map p/->map frames))))
-             ;; (println "Generated " out-path)
-             (conj res out-path))
-           (do
-             ;; (println "Skipping " file-name ", empty frames")
-             res))))
-     wrapped)))
 (defn extract-song-data-from-input-directory [input-dir output-dir format offset]
   (let [input-files (filter-midis input-dir)
         wrapped (progress-bar-wrapped-collection input-files "midi files")]
@@ -209,8 +164,9 @@
        ([] [])
        ([& r] (apply concat r)))
      (fn [res f]
-       (let [file-name (cstr/replace f (re-pattern input-dir) "")
+       (let [file-name (.getName (io/file f))
              file-extension (case format
+                              :ass ".ass"
                               :edn ".edn"
                               :json ".json")
              out-file-name (cstr/replace file-name #".mid" file-extension)
@@ -220,8 +176,8 @@
            (do
              (case format
                :edn (spit out-path (pr-str (p/->map song)))
-               :json (spit out-path (json/json-str (p/->map song))))
+               :json (spit out-path (json/json-str (p/->map song)))
+               :ass (spit out-path  (p/->ass song)))
              (conj res out-path))
-           (do
-             res))))
+           res)))
      wrapped)))

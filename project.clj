@@ -1,4 +1,4 @@
-(defproject baskeboler/clj-karaoke-lyrics "1.0.4-SNAPSHOT"
+(defproject baskeboler/clj-karaoke-lyrics "1.0.4"
   :description "Rip karaoke lyrics from karaoke midi files"
   :url "http://github.com/baskeboler/clj-karaoke-lyrics.git"
   :scm {:name "git" 
@@ -16,13 +16,11 @@
                  [criterium "0.4.6"]
                  [time-literals "0.1.4"]
                  [clj-cli-progress "0.1.0"]]
-  :main ^:skip-aot clj-karaoke.core
+  :main  clj-karaoke.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot [
-                             clj-karaoke.core clj-karaoke.karaoke clj-karaoke.lyrics
-                             clj-karaoke.lyrics-event clj-karaoke.lyrics-frame 
-                             clj-karaoke.protocols clj-karaoke.midi
-                             clj-karaoke.song-data]}}
+                             clj-karaoke.core
+                             ]}}
   :repositories
   {"clojars" {:url "https://clojars.org/repo"
               :sign-releases false

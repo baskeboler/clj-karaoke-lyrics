@@ -39,3 +39,6 @@
   (get-song-length [this])
   (validate [this])
   (sanitize [this]))
+
+(defprotocol PSubtitles
+  (->ass [this]))

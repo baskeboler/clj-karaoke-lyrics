@@ -46,7 +46,7 @@
        :midi-type 1}]}]})
 
 (def song (-> song-map
-              p/map->))
+              (p/map->)))
 
 (def frames (:frames song))
 (def a-frame (first frames))
@@ -61,24 +61,17 @@
       (is (number? (:offset e)))
       (is (number? (:ticks e)))))
   (testing "some regular event"
-    (let [evt (create-lyrics-event :id "myid" :ticks 100 :offset 120
-                                   :midi-type 1 :text "hey")
-          fr  (-> (gen/generate  (s/gen ::lf/lyrics-frame))
-                  (update-in [:events]
-                             (comp #(mapv le/map->MidiLyricsEvent %)
-                                #(sort-by :ticks %)
-                                (fn [evts] (map #(assoc % :offset (:ticks %)) evts))))
-                  (lf/map->MidiLyricsFrame))]
-      (is (= "hey" (p/get-text evt)))
-      (is (= 120 (p/get-offset evt)))
-      (is (not (p/played? evt 100)))
-      (is (p/played? evt 121))
-      (is (not-empty (p/get-next-event evt 100)))
-      (is (empty? (p/get-next-event evt 200)))))
+    
+      (is (= "He" (p/get-text an-event)))
+      (is (= 0 (p/get-offset an-event)))
+      (is (p/played? an-event 100))
+      (is (p/played? an-event 121))
+      (is (not-empty (p/get-next-event a-frame 20)))
+      (is (empty? (p/get-next-event a-frame 200))))
   (testing "splitting and joining frames"
     (let [duration (-> a-frame :events last :offset)
           middle   (/ duration 2)
-          [f1 f2]  (lf/split-frame-at a-frame middle)
+          [f1 f2]  (lf/split-frame-at a-frame 20)
           joined   (lf/join-frames f1 f2)]
       (is (= (-> a-frame :events count) (-> joined :events count)))
       (is (= (p/get-text a-frame) (p/get-text joined))))))
