@@ -40,12 +40,12 @@ Style: Default,Arial,16,&Hffffff,&Hff0000,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10
 
 (defn lyrics-ass-events [song]
   (for [[f end] (map vector
-                        (:frames song)
-                        (concat
-                         (map :offset (rest (:frames song)))
-                         '(250)))
+                     (:frames song)
+                     (concat
+                      (map :offset (rest (:frames song)))
+                      '(nil)))
         :let    [start (ms->lyrics-timing (p/get-offset f))
-                 end (ms->lyrics-timing end)
+                 end (ms->lyrics-timing (if-not (nil? end) end (+ start 1000)))
                  evt-lengths  (map (comp int #(/ % 10) :offset) (:events f))
                  text (apply str (for [[evt evt-len] (map vector (:events f) evt-lengths)]
                                    (str "{\\k" evt-len "}" (p/get-text evt))))]]
