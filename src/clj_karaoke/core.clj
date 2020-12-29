@@ -96,7 +96,10 @@
 
 (defn extract-song-data-from-file
   [input output format offset]
-  (let [song    (l/load-song-data-from-midi input)]
+  (let [song    (-> (l/load-song-data-from-midi input)
+                    (update :frames #(map (fn [frame]
+                                            (update frame :offset + offset))
+                                          %)))]
     (if-not (empty? (:frames song))
       (do
         (case format

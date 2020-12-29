@@ -19,7 +19,7 @@ ScaledBorderAndShadow: %s
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,16,&Hffffff,&Hffffff,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0"
+Style: Default,Arial,16,&Hffffff,&Hff0000,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0"
             play-res-x play-res-y (if scaled-border-and-shadow? "yes" "no"))))
 
 (defn create-script-info-section
@@ -39,21 +39,27 @@ Style: Default,Arial,16,&Hffffff,&Hffffff,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10
             subsec)))
 
 (defn lyrics-ass-events [song]
-  (for [f    (:frames song)
-        :let [start (ms->lyrics-timing (p/get-offset f))
-              end (-> (p/get-offset f)
-                      (+ (lf/frame-ms-duration f))
-                      (ms->lyrics-timing))
-              text (p/get-text f)]]
+  (for [[f end] (map vector
+                        (:frames song)
+                        (concat
+                         (map :offset (rest (:frames song)))
+                         '(250)))
+        :let    [start (ms->lyrics-timing (p/get-offset f))
+                 end (ms->lyrics-timing end)
+                 evt-lengths  (map (comp int #(/ % 10) :offset) (:events f))
+                 text (apply str (for [[evt evt-len] (map vector (:events f) evt-lengths)]
+                                   (str "{\\k" evt-len "}" (p/get-text evt))))]]
     {:start start
-     :end end
-     :text text}))
+     :end   end
+     :text  text}))
 
 (defrecord EventsSection [song]
   AssSection
   (print-ass-section [this]
     (apply str
-           "[Events]
+           "
+
+[Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 "
            (join "\n"
