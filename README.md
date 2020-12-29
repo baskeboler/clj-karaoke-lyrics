@@ -1,6 +1,9 @@
 # clj-karaoke
 
+[![Clojars Project](https://img.shields.io/clojars/v/baskeboler/clj-karaoke-lyrics.svg)](https://clojars.org/baskeboler/clj-karaoke-lyrics)
+
 clojure functions and cli program that extract lyrics and timing data for sing-along display 
+
 ## Building
 
     $ lein uberjar 
@@ -8,11 +11,12 @@ clojure functions and cli program that extract lyrics and timing data for sing-a
 ## Usage
 
 
-    $ java -jar clj-karaoke-0.1.0-standalone.jar input-file.mid output.json --type json
-
+    $ java -jar clj-karaoke-lyrics.jar input-file.mid output.json --type json
+    $ java -jar clj-karaoke-lyrics.jar -i <inputdir> -o <outputdir> -t ass --offset -1000
+    
 ## Options
 
-- `--type` either edn or json 
+- `--type` either edn, ass or json 
 - `--help` show help
 - `-i` input directory with midi files 
 - `-o` output directory where to store lyrics files 
