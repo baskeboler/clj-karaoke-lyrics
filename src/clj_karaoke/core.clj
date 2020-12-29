@@ -17,8 +17,11 @@
   (:gen-class))
 
 (set! *warn-on-reflection* true)
+
 ;; (set! ^:dynamic *print-length* nil)
+
 (def valid-formats #{:edn :json :ass})
+
 (def opts
   [["-t" "--type TYPE" "Type of output"
     :default "json"
@@ -90,21 +93,6 @@
       (doseq [e (:errors options)]
         (println e)))))
 
-;; (defn extract-lyrics-from-file [input output format offset]
-;;   ;; (assert (contains? valid-formats format))
-;;   (let [frames
-;;         ;; (map l/->MidiSimpleLyricsFrame
-;;                      (l/load-lyrics-from-midi input)
-;;         wrapped (progress-bar-wrapped-collection
-;;                  frames ;; (map #(l/with-offset % offset) frames)
-;;                  "frames")]
-;;     (if-not (empty? frames)
-;;       (do
-;;         (case format
-;;           :edn  (spit output (pr-str (map p/->map wrapped)))
-;;           :json (spit output (json/json-str (map p/->map wrapped))))
-;;         (println "Done! generated " output))
-;;       (println "Skipping " input ", empty frames"))))
 
 (defn extract-song-data-from-file
   [input output format offset]
@@ -118,32 +106,6 @@
         (println "done! generated " output))
       (println "skipping " input ", empty frames")))) 
 
-#_(defn extract-lyrics-2
-    ([midi-dir output-dir]
-     (let [files (filter-midis midi-dir)]
-       (r/fold
-        200
-        (fn
-          ([] [])
-          ([& r] (apply concat r)))
-        (fn [res f]
-          (println "processing " f)
-          (let [file-name (clojure.string/replace
-                           f (re-pattern midi-dir) "")
-                out-file-name (clojure.string/replace
-                               file-name #".mid" ".edn")
-                out-path (str output-dir "/" out-file-name)
-                frames (l/load-lyrics-from-midi f)]
-            (if-not (empty? frames)
-              (do
-                (spit out-path (pr-str (map l/->map frames)))
-                (println "Done! generated " out-path)
-                (conj res out-path))
-              (do
-                (println "Skipping " file-name ", empty frames")
-                res))))
-        (vec files))))
-    ([midi-dir] (extract-lyrics-2 midi-dir "lyrics")))
 
 (defn- is-midi? [^File file-obj]
   (.. file-obj

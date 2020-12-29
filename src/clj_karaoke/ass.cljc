@@ -1,8 +1,6 @@
 (ns clj-karaoke.ass
   (:require [clj-karaoke.protocols :as p]
-            ;; [clj-karaoke.song-data :as sd]
             [clj-karaoke.lyrics-frame :as lf]
-            ;; [clj-karaoke.lyrics-event :as le]
             [clojure.string :refer [join]]
             #?(:cljs [goog.string :refer [format]])))
 
@@ -62,12 +60,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                  (for [{:keys [start end text]} (lyrics-ass-events song)]
                    (format "Dialogue: 0,%s,%s,Default,,0,0,0,,%s" start end text))))))
 
-(defn ^:export ass-string [song]
+(defn ^:export ass-string
+  "Returns a string with the lyrics in ASS subtitle format"
+  [song]
   (str (print-ass-section (create-script-info-section))
        (print-ass-section (->EventsSection song))))
-;; (extend-protocol p/PSubtitles
-;;   clj_karaoke.song_data.SongData
-;;   (p/->ass [this]
-;;     (apply str
-;;            (print-ass-section (create-script-info-section))
-;;            (print-ass-section (->events-section this)))))
