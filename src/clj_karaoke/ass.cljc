@@ -19,7 +19,7 @@ ScaledBorderAndShadow: %s
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,16,&Hffffff,&Hff0000,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0"
+Style: Default,Arial,20,&H0000ff,&H000000,&Hffffff,&H000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0"
             play-res-x play-res-y (if scaled-border-and-shadow? "yes" "no"))))
 
 (defn create-script-info-section
@@ -44,11 +44,21 @@ Style: Default,Arial,16,&Hffffff,&Hff0000,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10
                      (concat
                       (map :offset (rest (:frames song)))
                       '(nil)))
-        :let    [start (ms->lyrics-timing (p/get-offset f))
+        :let    [evt-intervals (-> f
+                                   :events
+                                   (->>
+                                    (map :offset))
+                                   (concat 
+                                     [(- (if-not (nil? end)
+                                           end
+                                           (+ (p/get-offset f) 1000))
+                                         (p/get-offset f))])
+                                   (->> (partition 2 1))) 
+                 start (ms->lyrics-timing (p/get-offset f))
                  end (ms->lyrics-timing (if-not (nil? end) end (+ (p/get-offset f) 1000)))
-                 evt-lengths  (map (comp int #(/ % 10) :offset) (:events f))
+                 evt-lengths  (map (comp int (partial * 0.1) (fn [arg] (apply - arg)) reverse) evt-intervals)
                  text (apply str (for [[evt evt-len] (map vector (:events f) evt-lengths)]
-                                   (str "{\\k" evt-len "}" (p/get-text evt))))]]
+                                   (str "{\\k" evt-len "\\fad(200,200)}" (p/get-text evt))))]]
     {:start start
      :end   end
      :text  text}))
