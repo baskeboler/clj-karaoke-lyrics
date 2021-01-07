@@ -39,6 +39,30 @@
 
 (declare frame-text)
 
+(defn quick-events-diagnosis
+  "quick check to decide which meta messages we need to use for lyrics display.
+  * if the frame contains events with type 5, we will use those ignoring all others
+  * otherwise if it contains type 1 meta messages we may use those"
+  [events]
+  (let [midi-types (into #{}
+                         (->> events
+                              (map :midi-type)
+                              (filter some?)))]
+    (cond
+      (zero? (count events)) :empty-event-collection
+      (empty? midi-types)    :no-midi-types
+      (midi-types 5)         :type-5-meta-messages ; proper lyrics events
+      (midi-types 1)         :type-1-meta-messages ; other text events, may contain lyrics
+      :else                  :invalid-meta-message-types)))
+
+(defn smart-event-filter
+  [events]
+  (let [evt-analysis (quick-events-diagnosis events)]
+    (condp = evt-analysis
+      :type-5-meta-messages (filter #(= 5 (:midi-type %)) events)
+      :type-1-meta-messages (filter #(= 1 (:midi-type %)) events)
+      events)))
+
 (defrecord MidiLyricsFrame [events ticks]
   PMap
   (->map [this]
@@ -59,6 +83,7 @@
   (get-next-event [this offset]
     (->> this
          :events
+         (smart-event-filter)
          (filter #(< offset (+ (get-offset this) (get-offset %))))
          first)))
 
@@ -118,20 +143,22 @@
 
 (defn lyrics-frames [evts]
   (let [grps (lyrics-events-grouped evts)]
-    (map (fn [gr]
-           (->
-            (->MidiLyricsFrame gr (-> gr first :ticks))
-            (assoc :offset (-> gr first :offset))
-            (update :events
-                    (fn [evts]
-                      (let [base-offset (-> gr first :offset)
-                            base-ticks (-> gr first :ticks)]
-                        (map (fn [evt]
-                               (-> evt
-                                   (update :ticks #(- % base-ticks))
-                                   (update :offset #(- % base-offset))))
-                             evts))))))
-         grps)))
+    (->> grps
+         (map (fn [gr]
+                (->
+                 (->MidiLyricsFrame gr (-> gr first :ticks))
+                 (assoc :offset (-> gr first :offset))
+                 (update :events
+                         (fn [evts]
+                           (let [base-offset (-> gr first :offset)
+                                 base-ticks  (-> gr first :ticks)]
+                             (map (fn [evt]
+                                    (-> evt
+                                        (update :ticks #(- % base-ticks))
+                                        (update :offset #(- % base-offset))))
+                                  evts))))
+                 (update :events smart-event-filter))))
+         (filter #(pos? (count (:events %)))))))
 
 (defmethod map-> :frame-event
   [{:keys [ticks events offset id] :or {id (generate-id)} :as frame-map}]
@@ -139,7 +166,8 @@
   ;; :post [(s/valid? ::lyrics-frame %)]]
   (-> (->MidiLyricsFrame (mapv map-> events) ticks)
       (assoc :id id :offset offset)
-      (ensure-id)))
+      (ensure-id)
+      (update :events smart-event-filter)))
 
 (defn split-frame-at [frame ms]
   (let [{:keys [events ticks  offset]} frame

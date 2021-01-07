@@ -24,6 +24,7 @@ clojure functions and cli program that extract lyrics and timing data for sing-a
 ## References 
 
 - [Wiki format specification](https://github.com/colxi/midi-parser-js/wiki/MIDI-File-Format-Specifications)
+- [ASS specs](http://www.tcax.org/docs/ass-specs.htm)
 
 
 ## License

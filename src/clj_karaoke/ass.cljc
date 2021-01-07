@@ -58,7 +58,7 @@ Style: Default,Arial,20,&H0000ff,&H000000,&Hffffff,&H000000,0,0,0,0,100,100,0,0,
                  end (ms->lyrics-timing (if-not (nil? end) end (+ (p/get-offset f) 1000)))
                  evt-lengths  (map (comp int (partial * 0.1) (fn [arg] (apply - arg)) reverse) evt-intervals)
                  text (apply str (for [[evt evt-len] (map vector (:events f) evt-lengths)]
-                                   (str "{\\k" evt-len "\\fad(200,200)}" (p/get-text evt))))]]
+                                   (str "{\\K" evt-len "\\fad(200,200)}" (p/get-text evt))))]]
     {:start start
      :end   end
      :text  text}))
