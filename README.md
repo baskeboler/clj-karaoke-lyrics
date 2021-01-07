@@ -21,9 +21,14 @@ clojure functions and cli program that extract lyrics and timing data for sing-a
 - `-i` input directory with midi files 
 - `-o` output directory where to store lyrics files 
 
+## References 
+
+- [Wiki format specification](https://github.com/colxi/midi-parser-js/wiki/MIDI-File-Format-Specifications)
+
+
 ## License
 
-Copyright © 2020 
+Copyright © 2021
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
