@@ -37,7 +37,7 @@ jobs:
         # Packages to install with brew cask on macOS
 #         brew-cask: # optional, default is 
         # Packages to install with apt on Linux
-        apt: timidity # optional, default is 
+        apt: timidity ffmpeg fish  # optional, default is 
         # Packages to install with choco on Windows
 #         choco: # optional, default is 
     - name: Send greeting
