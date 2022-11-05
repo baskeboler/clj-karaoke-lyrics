@@ -42,4 +42,4 @@ jobs:
         # Packages to install with choco on Windows
 #         choco: # optional, default is 
     - name: generate mp3
-      run: ./midi-to-mp3.fish ${{ github.event.inputs.name }} ${{ github.event.inputs.name }}.mp3  #echo "Hello ${{ github.event.inputs.name }}"
+      run: ./midi-to-mp3.fish ${{ github.event.inputs.midi-file }} ${{ github.event.inputs.midi-file }}.mp3  #echo "Hello ${{ github.event.inputs.name }}"
