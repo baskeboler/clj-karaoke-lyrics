@@ -39,19 +39,19 @@ jobs:
 #         version: # optional, default is 
         # Option to refresh / upgrade the packages in the same cache.
 #         refresh: # optional, default is false
-    - name: Install Package
-      # You may pin to the exact commit or the version.
-      # uses: ConorMacBride/install-package@3e7ad059e07782ee54fa35f827df52aae0626f30
-      uses: ConorMacBride/install-package@v1.1.0
-      with:
-        # Packages to install with brew on macOS
-#         brew: # optional, default is 
-        # Packages to install with brew cask on macOS
-#         brew-cask: # optional, default is 
-        # Packages to install with apt on Linux
-        apt: timidity ffmpeg fish  # optional, default is 
-        # Packages to install with choco on Windows
-#         choco: # optional, default is 
+#     - name: Install Package
+#       # You may pin to the exact commit or the version.
+#       # uses: ConorMacBride/install-package@3e7ad059e07782ee54fa35f827df52aae0626f30
+#       uses: ConorMacBride/install-package@v1.1.0
+#       with:
+#         # Packages to install with brew on macOS
+# #         brew: # optional, default is 
+#         # Packages to install with brew cask on macOS
+# #         brew-cask: # optional, default is 
+#         # Packages to install with apt on Linux
+#         apt: timidity ffmpeg fish  # optional, default is 
+#         # Packages to install with choco on Windows
+# #         choco: # optional, default is 
     - name: generate mp3
       run: ./midi-to-mp3.fish ${{ github.event.inputs.midi-file }} ${{ github.event.inputs.midi-file }}.mp3  #echo "Hello ${{ github.event.inputs.name }}"
     - uses: actions/upload-artifact@v3
