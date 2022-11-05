@@ -54,3 +54,8 @@ jobs:
 #         choco: # optional, default is 
     - name: generate mp3
       run: ./midi-to-mp3.fish ${{ github.event.inputs.midi-file }} ${{ github.event.inputs.midi-file }}.mp3  #echo "Hello ${{ github.event.inputs.name }}"
+    - uses: actions/upload-artifact@v3
+      with:
+        name: Artifacts-V3
+        path: ${{ github.event.inputs.midi-file }}.mp3
+
