@@ -122,12 +122,17 @@
    (starts-with? (:text evt) "\\")
    (starts-with? (:text evt) "/")
    (clean-frame? evt)))
+
+(defn remove-non-printable-characters [x]
+  (clojure.string/replace x #"[\p{C}&&^(\S)]" ""))
+
 (defn clean-start-of-frame [evt]
   (-> evt
       (update :text (fn [t]
                       (-> t
                           (replace-first #"\\" "")
-                          (replace-first #"/" ""))))))
+                          (replace-first #"/" "")
+                          remove-non-printable-characters)))))
 
 (defn lyrics-events-grouped [evts]
   (loop [res [] events evts]
