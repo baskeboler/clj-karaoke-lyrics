@@ -15,3 +15,6 @@ new-midis/
 new-midis2/
 out*
 json*
+.clj-kondo
+Karaoke Midi Files
+.envrc
