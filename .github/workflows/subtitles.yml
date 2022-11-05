@@ -28,6 +28,17 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     # Runs a single command using the runners shell
+    - name: Cache APT Packages
+      # You may pin to the exact commit or the version.
+      # uses: awalsh128/cache-apt-pkgs-action@677fd9bce54b19c406f4a1651bca51b38b1f978a
+      uses: awalsh128/cache-apt-pkgs-action@v1.1.2
+      with:
+        # Space delimited list of packages to install.
+        packages: timidity ffmpeg fish  # default is 
+        # Version will create a new cache and install packages.
+#         version: # optional, default is 
+        # Option to refresh / upgrade the packages in the same cache.
+#         refresh: # optional, default is false
     - name: Install Package
       # You may pin to the exact commit or the version.
       # uses: ConorMacBride/install-package@3e7ad059e07782ee54fa35f827df52aae0626f30
