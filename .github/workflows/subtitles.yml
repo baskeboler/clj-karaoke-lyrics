@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
     # Inputs the workflow accepts.
     inputs:
-      name:
+      midi-file:
         # Friendly description to be shown in the UI instead of 'name'
-        description: 'Person to greet'
+        description: 'the midi file'
         # Default value if no value is explicitly provided
-        default: 'World'
+        default: 'song.mid'
         # Input has to be provided for the workflow to run
         required: true
 
@@ -40,5 +40,5 @@ jobs:
         apt: timidity ffmpeg fish  # optional, default is 
         # Packages to install with choco on Windows
 #         choco: # optional, default is 
-    - name: Send greeting
-      run: echo "Hello ${{ github.event.inputs.name }}"
+    - name: generate mp3
+      run: ./midi-to-mp3.fish ${{ github.event.inputs.name }} ${{ github.event.inputs.name }}.mp3  #echo "Hello ${{ github.event.inputs.name }}"
