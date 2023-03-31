@@ -1,6 +1,6 @@
 # clj-karaoke
 
-[![Clojars Project](https://img.shields.io/clojars/v/baskeboler/clj-karaoke-lyrics.svg)](https://clojars.org/baskeboler/clj-karaoke-lyrics)
+[![Clojars Project](https://img.shields.io/clojars/v/com.github.baskeboler/clj-karaoke-lyrics.svg)](https://clojars.org/com.github.baskeboler/clj-karaoke-lyrics)
 
 clojure functions and cli program that extract lyrics and timing data for sing-along display 
 
