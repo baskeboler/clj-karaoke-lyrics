@@ -2,7 +2,7 @@
   :description "Rip karaoke lyrics from karaoke midi files"
   :url "http://github.com/baskeboler/clj-karaoke-lyrics.git"
   :scm {:name "git" 
-  		  :url  "http://github.com/baskeboler/clj-karaoke-lyrics.git"}
+        :url  "http://github.com/baskeboler/clj-karaoke-lyrics.git"}
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.10.3"]
@@ -28,4 +28,5 @@
               :password :env/CLOJARS_TOKEN}
    "github" {:url "https://maven.pkg.github.com/baskeboler/cljs-karaoke-lyrics"
              :sign-releases false}}
-  :deploy-repositories [["releases" :clojars] ["snapshots" :clojars]])
+  :deploy-repositories [["releases" :clojars] ["snapshots" :clojars]]
+  :javac-options ["-target" "8" "-verbose"])
