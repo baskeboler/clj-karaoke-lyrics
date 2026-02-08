@@ -1,5 +1,6 @@
 (ns clj-karaoke.core-test
   (:require [clojure.test :refer :all]
+            [clj-cli-progress.core :as progress]
             [clj-karaoke.core]
             [clj-karaoke.song-data :as sd]
             [clj-karaoke.lyrics-event :as le :refer [create-lyrics-event]]
@@ -75,3 +76,37 @@
           joined   (lf/join-frames f1 f2)]
       (is (= (-> a-frame :events count) (-> joined :events count)))
       (is (= (p/get-text a-frame) (p/get-text joined))))))
+
+(deftest single-file-load-failure-test
+  (testing "single file mode should not crash when load-song-data returns nil"
+    (let [writes (atom 0)]
+      (with-redefs [clj-karaoke.lyrics/load-song-data-from-midi (fn [_] nil)
+                    clj-karaoke.core/write-song-data! (fn [& _] (swap! writes inc))]
+        (is (false? (clj-karaoke.core/extract-song-data-from-file
+                     "broken.mid"
+                     "/tmp/out.json"
+                     :json
+                     0)))
+        (is (= 0 @writes))))))
+
+(deftest directory-mode-applies-offset-test
+  (testing "directory mode applies offset before serialization"
+    (let [writes (atom [])
+          song {:title "x"
+                :frames [{:offset 100 :events []}]}]
+      (with-redefs [clj-karaoke.core/filter-midis (fn [_] ["/tmp/a.mid"])
+                    progress/progress-bar-wrapped-collection (fn [coll _] coll)
+                    clj-karaoke.lyrics/load-song-data-from-midi (fn [_] song)
+                    clj-karaoke.core/write-song-data! (fn [song out fmt]
+                                                        (swap! writes conj {:song song
+                                                                            :out out
+                                                                            :fmt fmt}))]
+        (is (= ["/tmp/out/a.json"]
+               (vec (clj-karaoke.core/extract-song-data-from-input-directory
+                     "/tmp/in"
+                     "/tmp/out"
+                     :json
+                     -1000))))
+        (is (= -900 (-> @writes first :song :frames first :offset)))
+        (is (= "/tmp/out/a.json" (-> @writes first :out)))
+        (is (= :json (-> @writes first :fmt)))))))

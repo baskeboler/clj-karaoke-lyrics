@@ -68,6 +68,21 @@
 (declare extract-lyrics-from-file extract-song-data-from-file)
 (declare extract-lyrics-from-input-directory extract-song-data-from-input-directory)
 
+(defn- with-frame-offset [song offset]
+  (if (zero? offset)
+    song
+    (update song :frames
+            (fn [frames]
+              (map (fn [frame]
+                     (update frame :offset + offset))
+                   frames)))))
+
+(defn- write-song-data! [song output format]
+  (case format
+    :edn (spit output (pr-str (p/->map song)))
+    :json (spit output (json/json-str (p/->map song)))
+    :ass (spit output (p/->ass song))))
+
 (defn -main [& args]
   (let [options                  (parse-opts args opts)
         [input-file output-file] (:arguments options)]
@@ -84,30 +99,34 @@
          (get-in options [:options :offset]))
         :else
         (do
-          (extract-song-data-from-file
-           input-file
-           output-file
-           (-> options :options :type)
-           (-> options :options :offset))
-          (println "Done.")))
+          (when (extract-song-data-from-file
+                 input-file
+                 output-file
+                 (-> options :options :type)
+                 (-> options :options :offset))
+            (println "Done."))))
       (doseq [e (:errors options)]
         (println e)))))
 
 
 (defn extract-song-data-from-file
   [input output format offset]
-  (let [song    (-> (l/load-song-data-from-midi input)
-                    (update :frames #(map (fn [frame]
-                                            (update frame :offset + offset))
-                                          %)))]
-    (if-not (empty? (:frames song))
+  (let [song (some-> (l/load-song-data-from-midi input)
+                     (with-frame-offset offset))]
+    (cond
+      (nil? song)
       (do
-        (case format
-          :edn  (spit output (pr-str (p/->map song)))
-          :json (spit output (json/json-str (p/->map song)))
-          :ass  (spit output (p/->ass song)))
-        (println "done! generated " output))
-      (println "skipping " input ", empty frames")))) 
+        (println "skipping " input ", failed to load song data")
+        false)
+      (empty? (:frames song))
+      (do
+        (println "skipping " input ", empty frames")
+        false)
+      :else
+      (do
+        (write-song-data! song output format)
+        (println "done! generated " output)
+        true))))
 
 
 (defn- is-midi? [^File file-obj]
@@ -136,13 +155,17 @@
                               :json ".json")
              out-file-name (cstr/replace file-name #".mid" file-extension)
              out-path (str output-dir "/" out-file-name)
-             song (l/load-song-data-from-midi f)]
-         (if-not (empty? (:frames song))
+             song (some-> (l/load-song-data-from-midi f)
+                          (with-frame-offset offset))]
+         (cond
+           (nil? song)
            (do
-             (case format
-               :edn (spit out-path (pr-str (p/->map song)))
-               :json (spit out-path (json/json-str (p/->map song)))
-               :ass (spit out-path  (p/->ass song)))
-             (conj res out-path))
-           res)))
+             (println "skipping " f ", failed to load song data")
+             res)
+           (empty? (:frames song))
+           res
+           :else
+           (do
+             (write-song-data! song out-path format)
+             (conj res out-path)))))
      wrapped)))

@@ -1,15 +1,18 @@
 (ns clj-karaoke.midi
-  (:require [clj-karaoke.protocols :refer [PMidiReader
-                                           get-tick-time get-lyrics-events
-                                           get-resolution get-tempo-bpm
-                                           get-division-type]]
-            [clj-karaoke.lyrics-event :refer [create-lyrics-event]]
-            [clj-karaoke.lyrics-frame :as lframe]
-            [clojure.core.async :as async]
-            [clojure.string :as cstr :refer [trim-newline]])
-  (:import [javax.sound.midi MidiSystem Track MidiEvent Sequencer Sequence MetaEventListener MetaMessage MidiMessage]
-           [java.lang String]
-           [java.io File]))
+  (:require
+   [clj-karaoke.lyrics-event :refer [create-lyrics-event]]
+   [clj-karaoke.lyrics-frame :as lframe]
+   [clj-karaoke.protocols :refer [get-lyrics-events get-tick-time PMidiReader]]
+   [clojure.core.async :as async]
+   [clojure.string :as cstr :refer [trim-newline]])
+  (:import
+   [java.lang String]
+   [javax.sound.midi
+    MetaMessage
+    MidiSystem
+    Sequence
+    Sequencer
+    Track]))
 
 (def generate-id (comp str gensym))
 
@@ -61,34 +64,31 @@
          sorted-msgs (sort-by :ticks msgs)]
      (map #(assoc % :offset (tick-fn (:ticks %))) sorted-msgs))))
 
-
-
 (defrecord MidiReader [midi-sequence midi-sequencer]
   PMidiReader
   (get-tick-time [this] (tick-time midi-sequencer midi-sequence))
   (get-lyrics-events [this] (lyrics-events midi-sequence midi-sequencer))
   (close-midi-reader [thid] (.close midi-sequencer))
   (play-midi [this]
-   (let [evts     (get-lyrics-events this)
-         frames   (lframe/lyrics-frames evts)
-         tick-fn  (get-tick-time this)
-         out-chan (async/chan)
-         tos      (->>
-                   (for [f (vec frames)]
-                     (async/go
-                       (async/<! (async/timeout (tick-fn (:ticks f))))
-                       (async/>! out-chan f)))
-                   (into []))]
-     (.start midi-sequencer)
-     {:timeouts  tos
-      :out-chan  out-chan
-      :sequencer midi-sequencer
-      :sequence  midi-sequence 
-      :frames    frames}))
+    (let [evts     (get-lyrics-events this)
+          frames   (lframe/lyrics-frames evts)
+          tick-fn  (get-tick-time this)
+          out-chan (async/chan)
+          tos      (->>
+                    (for [f (vec frames)]
+                      (async/go
+                        (async/<! (async/timeout (tick-fn (:ticks f))))
+                        (async/>! out-chan f)))
+                    (into []))]
+      (.start midi-sequencer)
+      {:timeouts  tos
+       :out-chan  out-chan
+       :sequencer midi-sequencer
+       :sequence  midi-sequence
+       :frames    frames}))
   (get-resolution [this] (.getResolution midi-sequence))
   (get-tempo-bpm [this] (. midi-sequencer (getTempoInBPM)))
   (get-division-type [this] (. midi-sequence (getDivisionType))))
-
 
 (defn ^:export create-midi-reader [file]
   (let [midi-sequence (MidiSystem/getSequence file)
